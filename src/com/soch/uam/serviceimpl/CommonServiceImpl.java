@@ -1,6 +1,5 @@
 package com.soch.uam.serviceimpl;
 
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
@@ -12,14 +11,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.soch.uam.dao.CommonDAO;
+import com.soch.uam.domain.DeptEntity;
 import com.soch.uam.domain.PolicyConfigEntity;
 import com.soch.uam.domain.PolicyGrpEntity;
 import com.soch.uam.domain.PolicySrcEntity;
+import com.soch.uam.domain.RolesEntity;
+import com.soch.uam.domain.SystemEntity;
+import com.soch.uam.dto.DepartmentDTO;
 import com.soch.uam.dto.PolicyConfigDTO;
 import com.soch.uam.dto.PolicyGrpDTO;
 import com.soch.uam.dto.PolicySrcDTO;
+import com.soch.uam.dto.RolesDTO;
+import com.soch.uam.dto.SystemDTO;
 import com.soch.uam.service.CommonService;
-import com.soch.uam.util.CacheUtil;
 
 @Service("commonService")
 public class CommonServiceImpl implements CommonService{
@@ -42,7 +46,8 @@ public class CommonServiceImpl implements CommonService{
 			{
 				policyConfigDTO = new PolicyConfigDTO();
 				policyConfigDTO.setPolicyName(policyConfigEntity.getPolicyName());
-				policyConfigDTO.setValue(policyConfigEntity.getValue());
+				if(policyConfigEntity.getValue() != null)
+					policyConfigDTO.setValue(policyConfigEntity.getValue());
 				policyConfigDTOs.add(policyConfigDTO);
 			}
 		}
@@ -91,9 +96,16 @@ public class CommonServiceImpl implements CommonService{
 		{
 			policySrcDTO = new PolicySrcDTO();
 			policyGrpDTO = new PolicyGrpDTO();
+			System.out.println(policySrcEntity.getPolicyName());
 			policySrcDTO.setPolicyName(policySrcEntity.getPolicyName());
-			policySrcDTO.setCmsVal(policySrcEntity.getCmsVal());
-			policySrcDTO.setVitaVal(policySrcEntity.getVitaVal());
+			if(policySrcEntity.getVitaVal() != null)
+				policySrcDTO.setCmsVal(policySrcEntity.getCmsVal());
+			else 
+				policySrcDTO.setCmsVal("");
+			if(policySrcEntity.getVitaVal() != null)
+				policySrcDTO.setVitaVal(policySrcEntity.getVitaVal());
+			else
+				policySrcDTO.setVitaVal("");
 			policyGrpDTO.setPolicyGrpName(policySrcEntity.getPolicyGrpEntity().getPolicyGrpName());
 			policySrcDTO.setPolicyGrpDTO(policyGrpDTO);
 			policySrcDTO.setPolicyId(policySrcEntity.getPolicyId());
@@ -105,8 +117,8 @@ public class CommonServiceImpl implements CommonService{
 
 	@Override
 	@Transactional
-	public void updateIdentityCMSPolicies() {
-		commonDAO.updateIdentityCMSPolicies();
+	public void updateIdentityCMSPolicies(String src, String policy) {
+		commonDAO.updateIdentityCMSPolicies(src, policy);
 	}
 
 	@Override
@@ -117,7 +129,6 @@ public class CommonServiceImpl implements CommonService{
 		System.out.println(policyConfigDTOs.size());
 		for(PolicyConfigDTO policyConfigDTO : policyConfigDTOs)
 		{
-			System.out.println(policyConfigDTO.getPolicyName());
 			Integer grpId = commonDAO.getMaxPolicyGRPId();
 			Integer srcId = commonDAO.getMaxPolicySrcId();
 			policySrcEntity = new PolicySrcEntity();
@@ -154,7 +165,59 @@ public class CommonServiceImpl implements CommonService{
 		}
 		
 	}
-	
-	
+
+	@Override
+	@Transactional
+	public Set<DepartmentDTO> getDepartments() {
+		
+		List<DeptEntity> deptEntities = commonDAO.getDepartments();
+		Set<DepartmentDTO> departmentDTOs = new HashSet<DepartmentDTO>();
+		DepartmentDTO departmentDTO;
+		for(DeptEntity deptEntity : deptEntities)
+		{
+			departmentDTO = new DepartmentDTO();
+			departmentDTO.setDeptId(deptEntity.getDeptId());
+			departmentDTO.setDeptName(deptEntity.getDeptName());
+			departmentDTOs.add(departmentDTO);
+		}
+		
+		return departmentDTOs;
+	}
+
+	@Override
+	@Transactional
+	public Set<SystemDTO> getDeptSystems(int deptId) {
+		
+		List<SystemEntity> systemEntities  = commonDAO.getSystems(deptId);
+		Set<SystemDTO> systemDTOs = new HashSet<SystemDTO>();
+		SystemDTO systemDTO;
+		for(SystemEntity systemEntity: systemEntities)
+		{
+			systemDTO = new SystemDTO();
+			systemDTO.setSystemId(systemEntity.getSystemId());
+			systemDTO.setSystemName(systemEntity.getSystemName());
+			systemDTOs.add(systemDTO);
+		}
+		
+		return systemDTOs;
+		
+	}
+
+	@Override
+	@Transactional
+	public Set<RolesDTO> getSystemRoles(int systemId) {
+		List<RolesEntity> rolesEntities = commonDAO.getRoles(systemId);
+		Set<RolesDTO> rolesDTOs = new HashSet<RolesDTO>();
+		RolesDTO rolesDTO;
+		for(RolesEntity rolesEntity : rolesEntities)
+		{
+			rolesDTO = new RolesDTO();
+			rolesDTO.setRoleId(rolesEntity.getRoleId());
+			rolesDTO.setRoleName(rolesEntity.getRoleName());
+			rolesDTOs.add(rolesDTO);
+		}
+		return rolesDTOs;
+	}
+
 
 }

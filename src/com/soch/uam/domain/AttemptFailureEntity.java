@@ -17,7 +17,7 @@ import org.hibernate.annotations.Parameter;
  */
 @Entity
 @Table(name = "ATTEMPT_FAILURE_TB")
-public class AttemptFailureTB implements java.io.Serializable {
+public class AttemptFailureEntity implements java.io.Serializable {
 
 	private int id;
 	private UserEntity userEntity;
@@ -25,14 +25,14 @@ public class AttemptFailureTB implements java.io.Serializable {
 	private Integer retPwd;
 	private Integer login;
 
-	public AttemptFailureTB() {
+	public AttemptFailureEntity() {
 	}
 
-	public AttemptFailureTB(UserEntity userTb) {
+	public AttemptFailureEntity(UserEntity userTb) {
 		this.userEntity = userTb;
 	}
 
-	public AttemptFailureTB(UserEntity userTb, Integer retUid, Integer retPwd, Integer login) {
+	public AttemptFailureEntity(UserEntity userTb, Integer retUid, Integer retPwd, Integer login) {
 		this.userEntity = userTb;
 		this.retUid = retUid;
 		this.retPwd = retPwd;

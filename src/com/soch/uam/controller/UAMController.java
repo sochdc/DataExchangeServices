@@ -1,8 +1,10 @@
 package com.soch.uam.controller;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+import javax.servlet.http.HttpServletResponse;
 import javax.validation.Valid;
 
 import org.hibernate.exception.ConstraintViolationException;
@@ -10,19 +12,34 @@ import org.jboss.security.auth.spi.Users.User;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Controller;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartHttpServletRequest;
 
 import com.soch.uam.dao.UserDAO;
 import com.soch.uam.domain.PolicyConfigEntity;
+import com.soch.uam.dto.DepartmentDTO;
+import com.soch.uam.dto.OnboardApprovalPendingDTO;
+import com.soch.uam.dto.PendingApprovalResp;
 import com.soch.uam.dto.PolicyConfigDTO;
 import com.soch.uam.dto.PolicySrcDTO;
+import com.soch.uam.dto.RolesDTO;
+import com.soch.uam.dto.SystemDTO;
+import com.soch.uam.dto.TempUserDTO;
 import com.soch.uam.dto.UserDTO;
 import com.soch.uam.exception.InvalidDataException;
+import com.soch.uam.request.ContactUsReq;
 import com.soch.uam.request.UserSVCReq;
+import com.soch.uam.response.DeptSysRoleResp;
+import com.soch.uam.response.OnboardingReq;
+import com.soch.uam.response.UAMUIResponse;
+import com.soch.uam.response.UserReq;
 import com.soch.uam.response.UserSVCResp;
 import com.soch.uam.service.CommonService;
 import com.soch.uam.service.UserService;
@@ -53,7 +70,6 @@ public class UAMController {
 	 @ResponseBody
 	 public UserSVCResp signupUser(@RequestBody  UserSVCReq userSVCReq)
 		{
-			System.out.println(userSVCReq.getUser().getEmailId());
 			
 			UserDTO userDTO = userService.signUpUser(userSVCReq.getUser());
 			
@@ -161,16 +177,25 @@ public class UAMController {
 		{
 			UserSVCResp userSVCResp = new UserSVCResp();
 			UserDTO userDTO =  userService.signInUser(userSVCReq.getUser());
+			System.out.println(userDTO.isLockFlag());
 			if(userDTO.getUserId() == null)
 			{
 				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.LOGIN.FAILURE.CODE",null, Locale.getDefault())));
 				userSVCResp.setresultString(messageSource.getMessage("USER.LOGIN.FAILURE.STRING",null, Locale.getDefault()));
 			}
+			
 			else if(userDTO!= null && userDTO.isLockFlag())
 			{
 				
 				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ACCOUNT.LOCK.CODE",null, Locale.getDefault())));
 				userSVCResp.setresultString(messageSource.getMessage("USER.ACCOUNT.LOCK.STRING",null, Locale.getDefault()));
+				userSVCResp.setUser(userDTO);
+			}
+			else if(userDTO!= null && userDTO.isMaxAttemptReached())
+			{
+				
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ACCOUNT.MAXATTEMPTS.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.ACCOUNT.MAXATTEMPTS.STRING",null, Locale.getDefault()));
 				userSVCResp.setUser(userDTO);
 			}
 			else if(userDTO!= null && !userDTO.isActiveFlag())
@@ -229,6 +254,11 @@ public class UAMController {
 			{
 				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("FORGOT.USER.ID.FOUND.CODE",null, Locale.getDefault())));
 				userSVCResp.setresultString(messageSource.getMessage("FORGOT.USER.ID.FOUND.STRING",null, Locale.getDefault()));
+				userSVCResp.setUser(userDTO);
+			}else 	if(userDTO.isLockFlag())
+			{
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ACCOUNT.LOCK.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.ACCOUNT.LOCK.STRING",null, Locale.getDefault()));
 				userSVCResp.setUser(userDTO);
 			}
 			else {
@@ -395,10 +425,10 @@ public class UAMController {
 	 
 	 @RequestMapping(value = "/updIdentityCMSPoliciesSVC", method = RequestMethod.GET)
 	 @ResponseBody	
-	 public UserSVCResp updIdentityCMSPoliciesSVC() {
+	 public UserSVCResp updIdentityCMSPoliciesSVC(@RequestParam(value="src") String src, @RequestParam(value="policy") String policy) {
 		 UserSVCResp userSVCResp = new UserSVCResp();
 			
-		 commonService.updateIdentityCMSPolicies();
+		 commonService.updateIdentityCMSPolicies(src, policy);
 		 
 		 	userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("POLICY.UPDATE.SUCCESS.CODE",null, Locale.getDefault())));
 			userSVCResp.setresultString(messageSource.getMessage("POLICY.UPDATE.SUCCESS.STRING",null, Locale.getDefault()));
@@ -406,6 +436,208 @@ public class UAMController {
 			return userSVCResp;
 	 }
 	 
+	 @RequestMapping(value = "/changeUserStatusSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public UserSVCResp changeUserStatusSVC(@RequestParam(value="userId") String userId) {
+		 UserSVCResp userSVCResp = new UserSVCResp();
+			
+		 	UserDTO userDTO = userService.changeUserStatus(userId);
+		 	
+		 	userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.UPDATE.SUCCESS.CODE",null, Locale.getDefault())));
+			userSVCResp.setresultString(messageSource.getMessage("USER.UPDATE.SUCCESS.STRING",null, Locale.getDefault()));
+			userSVCResp.setUser(userDTO);
+			return userSVCResp;
+	 }
 	 
+	 
+	 @RequestMapping(value = "/contactUsSVC", method = RequestMethod.POST)
+	 @ResponseBody	
+	 public UserSVCResp contactUsSVC(@RequestBody  ContactUsReq ContactUsReq)
+		{
+			UserSVCResp userSVCResp = new UserSVCResp();
+			
+			
+			return userSVCResp;
+		}
+	 
+	 @RequestMapping(value = "/searchUserSVC", method = RequestMethod.POST)
+	 @ResponseBody	
+	 public UserSVCResp searchUserSVC(@RequestBody  UserReq userReq)
+		{
+			UserSVCResp userSVCResp = new UserSVCResp();
+			
+			UserDTO userDTO = userService.searchUser(userReq);
+			
+			if(userDTO != null)
+			{
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.AVAILABLE.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.ID.AVAILABLE.STRING",null, Locale.getDefault()));
+				userSVCResp.setUser(userDTO);
+			}
+			else {
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.NOTAVAILABLE.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.ID.NOTAVAILABLE.STRING",null, Locale.getDefault()));
+			}
+			
+			return userSVCResp;
+		}
+	 
+	 @RequestMapping(value = "/changeLockStatusSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public UserSVCResp changeLockStatusSVC(@RequestParam(value="userId") String userId) {
+		 UserSVCResp userSVCResp = new UserSVCResp();
+			
+		 	UserDTO userDTO = userService.changeLockStatus(userId);
+		 	
+		 	userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.UPDATE.SUCCESS.CODE",null, Locale.getDefault())));
+			userSVCResp.setresultString(messageSource.getMessage("USER.UPDATE.SUCCESS.STRING",null, Locale.getDefault()));
+			userSVCResp.setUser(userDTO);
+			return userSVCResp;
+	 }
+	 
+	 //resetPasswordSVC
+	 @RequestMapping(value = "/resetPasswordSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public UserSVCResp resetPasswordSVC(@RequestParam(value="userId") String userId) {
+		 UserSVCResp userSVCResp = new UserSVCResp();
+			
+		 	UserDTO userDTO = userService.resetUserPwd(userId);
+		 	
+		 	userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.UPDATE.SUCCESS.CODE",null, Locale.getDefault())));
+			userSVCResp.setresultString(messageSource.getMessage("USER.UPDATE.SUCCESS.STRING",null, Locale.getDefault()));
+			userSVCResp.setUser(userDTO);
+			return userSVCResp;
+	 }
+	 
+	 //resetPasswordSVC
+	 @RequestMapping(value = "/logOutSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public UserSVCResp logOutSVC(@RequestParam(value="token") String token) {
+		 UserSVCResp userSVCResp = new UserSVCResp();
+			
+		 	userService.logOut(token);
+		 	
+		 	userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.LOGGEDOUT.CODE",null, Locale.getDefault())));
+			userSVCResp.setresultString(messageSource.getMessage("USER.LOGGEDOUT.STRING",null, Locale.getDefault()));
+			return userSVCResp;
+	 }
+	 
+	 @RequestMapping(value = "/passwordPolicySVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public UserSVCResp passwordPolicySVC() {
+		 UserSVCResp userSVCResp = new UserSVCResp();
+			
+		 	
+		 userSVCResp = userService.getPasswordPolicy();
+		 	userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.LOGGEDOUT.CODE",null, Locale.getDefault())));
+			userSVCResp.setresultString(messageSource.getMessage("USER.LOGGEDOUT.STRING",null, Locale.getDefault()));
+			return userSVCResp;
+	 }
+	 
+	 @RequestMapping(value = "/getDepartmentSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public DeptSysRoleResp getDepartment() {
+		 DeptSysRoleResp deptSysRoleResp = new DeptSysRoleResp();
+			
+		 	Set<DepartmentDTO> departmentDTOs = null;
+		 	departmentDTOs = commonService.getDepartments();
+		 	deptSysRoleResp.setDepartmentDTOs(departmentDTOs);
+		 	deptSysRoleResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.LOGGEDOUT.CODE",null, Locale.getDefault())));
+		 	deptSysRoleResp.setresultString(messageSource.getMessage("USER.LOGGEDOUT.STRING",null, Locale.getDefault()));
+			return deptSysRoleResp;
+	 }
+	 
+	 @RequestMapping(value = "/getSystemSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public DeptSysRoleResp getSystemSVC(@RequestParam(value="deptId") Integer deptId) {
+		 DeptSysRoleResp deptSysRoleResp = new DeptSysRoleResp();
+			
+		 	Set<SystemDTO> systemDTOs = null;
+		 	systemDTOs = commonService.getDeptSystems(deptId);
+		 	deptSysRoleResp.setSystemDTOs(systemDTOs);
+		 	deptSysRoleResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.LOGGEDOUT.CODE",null, Locale.getDefault())));
+		 	deptSysRoleResp.setresultString(messageSource.getMessage("USER.LOGGEDOUT.STRING",null, Locale.getDefault()));
+			return deptSysRoleResp;
+	 }
+	 
+	 @RequestMapping(value = "/getSystemRolesSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public DeptSysRoleResp getSystemRolesSVC(@RequestParam(value="sysId") Integer sysId) {
+		 DeptSysRoleResp deptSysRoleResp = new DeptSysRoleResp();
+			
+		 	Set<RolesDTO> rolesDTOs = null;
+		 	rolesDTOs = commonService.getSystemRoles(sysId);
+		 	deptSysRoleResp.setRolesDTOs(rolesDTOs);
+		 	deptSysRoleResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.LOGGEDOUT.CODE",null, Locale.getDefault())));
+		 	deptSysRoleResp.setresultString(messageSource.getMessage("USER.LOGGEDOUT.STRING",null, Locale.getDefault()));
+			return deptSysRoleResp;
+	 }
+	 //getSystemSVC
+	 
+	 @RequestMapping(value = "/onBoardingSVC", method = RequestMethod.POST)
+	 @ResponseBody	
+	 public UserSVCResp onBoardingSVC(@RequestBody  OnboardingReq onboardingReq)
+		{
+		 	UserSVCResp userSVCResp = new UserSVCResp();
+		    userService.onBoardingUser(onboardingReq);
+			userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.REGISTRATION.SUCCUESS.CODE",null, Locale.getDefault())));
+			userSVCResp.setresultString(messageSource.getMessage("USER.REGISTRATION.SUCCUESS.STATUS",null, Locale.getDefault()));
+			return userSVCResp;
+		}
+	 
+	 @RequestMapping(value = "/getPendingRequestsSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public PendingApprovalResp getPendingRequestsSVC(@RequestParam(value="id") int userId)
+		{
+		 PendingApprovalResp pendingApprovalResp = new PendingApprovalResp();
+		 	 Set<OnboardApprovalPendingDTO> approvalPendingDTOs = userService.getPendingReq(userId);
+		 	pendingApprovalResp.setOnboardApprovalPendingDTOs(approvalPendingDTOs);
+		 	pendingApprovalResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.REGISTRATION.SUCCUESS.CODE",null, Locale.getDefault())));
+		 	pendingApprovalResp.setresultString(messageSource.getMessage("USER.REGISTRATION.SUCCUESS.STATUS",null, Locale.getDefault()));
+			return pendingApprovalResp;
+		}
+	 
+	 @RequestMapping(value = "/getTempUserSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public UserSVCResp getTempUserSVC(@RequestParam(value="id") String userId)
+		{
+		 UserSVCResp userSVCResp = new UserSVCResp();
+		 	 TempUserDTO tempUserDTO = userService.getTempUser(userId);
+		 	userSVCResp.setTempUserDTO(tempUserDTO);
+		 	userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.LOGIN.SUCCESS.CODE",null, Locale.getDefault())));
+			userSVCResp.setresultString(messageSource.getMessage("USER.LOGIN.SUCCESS.STRING",null, Locale.getDefault()));
+			return userSVCResp;
+		}
+	 
+	 @RequestMapping(value = "/approveRejectUserSVC", method = RequestMethod.POST)
+	 @ResponseBody	
+	 public UserSVCResp approveRejectUserSVC(@RequestBody TempUserDTO tempUserDTO)
+		{
+		 	UserSVCResp userSVCResp = new UserSVCResp();
+		 	userSVCResp = userService.approveRejectUser(tempUserDTO);
+			return userSVCResp;
+		}
+	 
+	 @RequestMapping(value = "/getOnboardUserSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public UserSVCResp getOnboardUserSVC(@RequestParam(value="token") String token)
+		{
+		 UserSVCResp userSVCResp = new UserSVCResp();
+		 userSVCResp = userService.getOnboardUser(token);
+		 return userSVCResp;
+		}
+	 
+	 
+	 @RequestMapping(value = "/fetchTempUserNotesSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public UserSVCResp fetchTempUserNotesSVC(@RequestParam(value="id") String id)
+		{
+		 UserSVCResp userSVCResp = new UserSVCResp();
+		 return userSVCResp;
+		}
+	 
+	 //fetchTempUserNotes
+	 
+	 //getOnboardUser
 	 
 }

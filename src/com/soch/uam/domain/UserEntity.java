@@ -13,6 +13,7 @@ import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.OneToMany;
+import javax.persistence.OneToOne;
 import javax.persistence.OrderBy;
 import javax.persistence.Table;
 import javax.persistence.TableGenerator;
@@ -101,14 +102,27 @@ public class UserEntity implements Serializable{
 	private Set<SecurityQAEntity> securityQA;
 	
 	@OneToMany(mappedBy="userEntity",cascade = CascadeType.ALL, fetch = FetchType.LAZY) 
-	@OrderBy("loginTs DESC")
+	@OrderBy("loginTs desc")
 	private Set<LoginEntity> logintEntity;
 	
 	@OneToMany(fetch = FetchType.LAZY, mappedBy = "userEntity")
 	private Set<UserRoleEntity> userRoleEntities = new HashSet<UserRoleEntity>(0);
 	
+	@OneToOne(fetch = FetchType.LAZY, mappedBy = "userEntity")
+	private UserWorkEntity userWorkEntity;
+	
+	@OneToMany(fetch = FetchType.LAZY, mappedBy = "userEntity")
+	private Set<OnboardingApprovalEntity> onboardingApprovalEntity = new HashSet<OnboardingApprovalEntity>(0);
 	
 	
+	public UserWorkEntity getUserWorkEntity() {
+		return userWorkEntity;
+	}
+
+	public void setUserWorkEntity(UserWorkEntity userWorkEntity) {
+		this.userWorkEntity = userWorkEntity;
+	}
+
 	public boolean isPwdChangeFlag() {
 		return pwdChangeFlag;
 	}
@@ -294,11 +308,13 @@ public class UserEntity implements Serializable{
 	public void setUserRoleEntities(Set<UserRoleEntity> userRoleEntities) {
 		this.userRoleEntities = userRoleEntities;
 	}
-	
-	
 
-	
-	
-	
+	public Set<OnboardingApprovalEntity> getOnboardingApprovalEntity() {
+		return onboardingApprovalEntity;
+	}
 
+	public void setOnboardingApprovalEntity(Set<OnboardingApprovalEntity> onboardingApprovalEntity) {
+		this.onboardingApprovalEntity = onboardingApprovalEntity;
+	}
+	
 }
