@@ -4,46 +4,38 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-import javax.servlet.http.HttpServletResponse;
-import javax.validation.Valid;
-
-import org.hibernate.exception.ConstraintViolationException;
-import org.jboss.security.auth.spi.Users.User;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Controller;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.multipart.MultipartHttpServletRequest;
 
-import com.soch.uam.dao.UserDAO;
-import com.soch.uam.domain.PolicyConfigEntity;
+import com.soch.uam.dto.ContractCompayDTO;
 import com.soch.uam.dto.DepartmentDTO;
 import com.soch.uam.dto.OnboardApprovalPendingDTO;
+import com.soch.uam.dto.OnboardingApprovalDTO;
 import com.soch.uam.dto.PendingApprovalResp;
-import com.soch.uam.dto.PolicyConfigDTO;
-import com.soch.uam.dto.PolicySrcDTO;
 import com.soch.uam.dto.RolesDTO;
 import com.soch.uam.dto.SystemDTO;
 import com.soch.uam.dto.TempUserDTO;
 import com.soch.uam.dto.UserDTO;
-import com.soch.uam.exception.InvalidDataException;
+import com.soch.uam.dto.policy.AddNewPolicyDTO;
+import com.soch.uam.dto.policy.PolicyConfigDTO;
+import com.soch.uam.dto.policy.PolicySrcDTO;
+import com.soch.uam.request.AddRoleReq;
 import com.soch.uam.request.ContactUsReq;
 import com.soch.uam.request.UserSVCReq;
+import com.soch.uam.response.CommonResp;
 import com.soch.uam.response.DeptSysRoleResp;
 import com.soch.uam.response.OnboardingReq;
-import com.soch.uam.response.UAMUIResponse;
+import com.soch.uam.response.PolicySVCResp;
 import com.soch.uam.response.UserReq;
 import com.soch.uam.response.UserSVCResp;
 import com.soch.uam.service.CommonService;
 import com.soch.uam.service.UserService;
-import com.soch.uam.util.POJOCacheUtil;
 
 @Controller
 @RequestMapping("/")
@@ -323,9 +315,9 @@ public class UAMController {
 		{
 			UserSVCResp userSVCResp = new UserSVCResp();
 			
-			Set<PolicyConfigDTO> policyConfigDTOs = userSVCReq.getPolicyConfigDTOs();
+			Set<PolicySrcDTO> policySrcDTOsl = userSVCReq.getPolicySrcDTOs();
 			
-			commonService.updatePolicies(policyConfigDTOs);
+			commonService.updatePolicies(policySrcDTOsl);
 			
 			return userSVCResp;
 		}
@@ -337,9 +329,10 @@ public class UAMController {
 		{
 			UserSVCResp userSVCResp = new UserSVCResp();
 			
-			Set<PolicyConfigDTO> policyConfigDTOs = userSVCReq.getPolicyConfigDTOs();
+			Set<PolicySrcDTO> policySrcDTOs = userSVCReq.getPolicySrcDTOs();
 			
-			commonService.addPolicy(policyConfigDTOs);
+			
+			commonService.addPolicy(policySrcDTOs);
 			
 			return userSVCResp;
 		}
@@ -409,15 +402,15 @@ public class UAMController {
 	 
 	 @RequestMapping(value = "/getDefaultPoliciesSVC", method = RequestMethod.GET)
 	 @ResponseBody	
-	 public UserSVCResp getDefaultPoliciesSVC()
+	 public UserSVCResp getDefaultPoliciesSVC(@RequestParam(value="src") int src)
 		{
 			UserSVCResp userSVCResp = new UserSVCResp();
 			
 			userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("FORGOT.USER.ID.FOUND.CODE",null, Locale.getDefault())));
 			userSVCResp.setresultString(messageSource.getMessage("FORGOT.USER.ID.FOUND.STRING",null, Locale.getDefault()));
-			Set<PolicySrcDTO> policySrcDTOs = commonService.gePolicySrcDTOs();
-			Set<PolicyConfigDTO> policyConfigDTOs = commonService.getALLPolicies();
-			userSVCResp.setPolicyConfigDTOs(policyConfigDTOs);
+			Set<PolicySrcDTO> policySrcDTOs = commonService.gePolicySrcDTOs(src);
+			//Set<PolicyConfigDTO> policyConfigDTOs = commonService.getALLPolicies();
+			//userSVCResp.setPolicyConfigDTOs(policyConfigDTOs);
 			userSVCResp.setPolicySrcDTOs(policySrcDTOs);
 			
 			return userSVCResp;
@@ -425,7 +418,7 @@ public class UAMController {
 	 
 	 @RequestMapping(value = "/updIdentityCMSPoliciesSVC", method = RequestMethod.GET)
 	 @ResponseBody	
-	 public UserSVCResp updIdentityCMSPoliciesSVC(@RequestParam(value="src") String src, @RequestParam(value="policy") String policy) {
+	 public UserSVCResp updIdentityCMSPoliciesSVC(@RequestParam(value="src") int src, @RequestParam(value="policy") String policy) {
 		 UserSVCResp userSVCResp = new UserSVCResp();
 			
 		 commonService.updateIdentityCMSPolicies(src, policy);
@@ -435,6 +428,32 @@ public class UAMController {
 			
 			return userSVCResp;
 	 }
+	 
+	 
+	 @RequestMapping(value = "/updatePoliciesSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public UserSVCResp updatePoliciesSVC(@RequestParam(value="src") int src, @RequestParam(value="policy") String policy) {
+		 UserSVCResp userSVCResp = new UserSVCResp();
+			
+		 commonService.updateIdentityCMSPolicies(src, policy);
+		 
+		 	userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("POLICY.UPDATE.SUCCESS.CODE",null, Locale.getDefault())));
+			userSVCResp.setresultString(messageSource.getMessage("POLICY.UPDATE.SUCCESS.STRING",null, Locale.getDefault()));
+			
+			return userSVCResp;
+	 }
+	 
+	 @RequestMapping(value = "/getUserTypesSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public PolicySVCResp getUserTypesSVC() {
+		 PolicySVCResp policySVCResp = new PolicySVCResp();
+			
+		     policySVCResp.setUserTypeDTOs(commonService.getUserTypes());
+			
+			return policySVCResp;
+	 }
+	 
+	 //
 	 
 	 @RequestMapping(value = "/changeUserStatusSVC", method = RequestMethod.GET)
 	 @ResponseBody	
@@ -579,9 +598,18 @@ public class UAMController {
 	 public UserSVCResp onBoardingSVC(@RequestBody  OnboardingReq onboardingReq)
 		{
 		 	UserSVCResp userSVCResp = new UserSVCResp();
-		    userService.onBoardingUser(onboardingReq);
-			userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.REGISTRATION.SUCCUESS.CODE",null, Locale.getDefault())));
-			userSVCResp.setresultString(messageSource.getMessage("USER.REGISTRATION.SUCCUESS.STATUS",null, Locale.getDefault()));
+		    Integer response = userService.onBoardingUser(onboardingReq);
+		    if(response == 0)
+		    {
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.REGISTRATION.SUCCUESS.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.REGISTRATION.SUCCUESS.STATUS",null, Locale.getDefault()));
+		    }
+		    else
+		    {
+		    	userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ONBOARD.ROLES.CONFILT.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.ONBOARD.ROLES.CONFILT.STRING",null, Locale.getDefault()));
+		    }
+		    
 			return userSVCResp;
 		}
 	 
@@ -635,6 +663,126 @@ public class UAMController {
 		 UserSVCResp userSVCResp = new UserSVCResp();
 		 return userSVCResp;
 		}
+	 
+	 
+	 @RequestMapping(value = "/getPolicyGroupSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public UserSVCResp getPolicyGroupSVC(@RequestParam(value="userType") int userType)
+		{
+		 UserSVCResp userSVCResp = new UserSVCResp();
+		 userSVCResp.setPolicyGrpDTOs(commonService.getPolicyGroup(userType));
+		 return userSVCResp;
+		}
+	 
+	 @RequestMapping(value = "/addNewPolicySVC", method = RequestMethod.POST)
+	 @ResponseBody	
+	 public UserSVCResp addNewPolicySVC(@RequestBody AddNewPolicyDTO addNewPolicyDTO)
+		{
+		 UserSVCResp userSVCResp = new UserSVCResp();
+		 commonService.addNewPolicyDTO(addNewPolicyDTO);
+		 userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("GENERAL.SUCCESS.CODE",null, Locale.getDefault())));
+		 userSVCResp.setresultString(messageSource.getMessage("GENERAL.SUCCESS.STRING",null, Locale.getDefault()));
+		 return userSVCResp;
+		}
+	 
+	 @RequestMapping(value = "/validateTokenSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public UserSVCResp validateTokenSVC(@RequestParam(value="token") String token,@RequestParam(value="userId") Integer userId)
+		{
+		 UserSVCResp userSVCResp = new UserSVCResp();
+		 if(userService.validateToken(token, userId))
+		 {
+			 userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("GENERAL.SUCCESS.CODE",null, Locale.getDefault())));
+			 userSVCResp.setresultString(messageSource.getMessage("GENERAL.SUCCESS.STRING",null, Locale.getDefault()));
+		 }
+		 else
+		 {
+			 userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("INVALID.TOKEN.CODE",null, Locale.getDefault())));
+			 userSVCResp.setresultString(messageSource.getMessage("INVALID.TOKEN.STRING",null, Locale.getDefault()));
+		 }
+	
+		 return userSVCResp;
+		}
+	 
+	 
+	 @RequestMapping(value = "/getApprovalListSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public UserSVCResp getApprovalListSVC(@RequestParam(value="roleId") Integer roleId)
+		{
+		 UserSVCResp userSVCResp = new UserSVCResp();
+		 
+		 Set<OnboardingApprovalDTO>  approvalDTOs =userService.getApprovalList(roleId);
+		 
+		 userSVCResp.setOnboardingApprovalDTOs(approvalDTOs);
+		 
+		/* if(userService.validateToken(token, userId))
+		 {
+			 userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("GENERAL.SUCCESS.CODE",null, Locale.getDefault())));
+			 userSVCResp.setresultString(messageSource.getMessage("GENERAL.SUCCESS.STRING",null, Locale.getDefault()));
+		 }
+		 else
+		 {
+			 userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("INVALID.TOKEN.CODE",null, Locale.getDefault())));
+			 userSVCResp.setresultString(messageSource.getMessage("INVALID.TOKEN.STRING",null, Locale.getDefault()));
+		 }*/
+	
+		 return userSVCResp;
+		}
+	 
+	 
+	 @RequestMapping(value = "/addApprovalSVC", method = RequestMethod.POST)
+	 @ResponseBody	
+	 public UserSVCResp addApprovalSVC(@RequestBody  OnboardingApprovalDTO onboardingApprovalDTO)
+		{
+			 UserSVCResp userSVCResp = new UserSVCResp();
+			 int status = commonService.addOnboardApproval(onboardingApprovalDTO);
+			 System.out.println("status "+status);
+			 if(status == 1)
+			 {
+				 userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("DUPLICATE.ONBOARD.APPROVAL.CODE",null, Locale.getDefault())));
+				 userSVCResp.setresultString(messageSource.getMessage("DUPLICATE.ONBOARD.APPROVAL.STRING",null, Locale.getDefault()));
+				 //DUPLICATE.ONBOARD.APPROVAL.STRING
+			 }
+			 else {
+				 userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("GENERAL.SUCCESS.CODE",null, Locale.getDefault())));
+				 userSVCResp.setresultString(messageSource.getMessage("GENERAL.SUCCESS.STRING",null, Locale.getDefault()));
+			 }
+			 return userSVCResp;
+		}
+	 
+	 @RequestMapping(value = "/addNewRoleSVC", method = RequestMethod.POST)
+	 @ResponseBody	
+	 public UserSVCResp addNewRoleSVC(@RequestBody  AddRoleReq roleReq)
+		{
+			 UserSVCResp userSVCResp = new UserSVCResp();
+			 int status = commonService.addRole(roleReq);
+			 if(status == 1)
+			 {
+				 userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("DUPLICATE.ONBOARD.APPROVAL.CODE",null, Locale.getDefault())));
+				 userSVCResp.setresultString(messageSource.getMessage("DUPLICATE.ONBOARD.APPROVAL.STRING",null, Locale.getDefault()));
+				 //DUPLICATE.ONBOARD.APPROVAL.STRING
+			 }
+			 else {
+				 userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("GENERAL.SUCCESS.CODE",null, Locale.getDefault())));
+				 userSVCResp.setresultString(messageSource.getMessage("GENERAL.SUCCESS.STRING",null, Locale.getDefault()));
+			 }
+			 return userSVCResp;
+		}
+	 
+	 @RequestMapping(value = "/getContractCompanyListSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public CommonResp getContractCompanyListSVC()
+		{
+		 CommonResp commonResp = new CommonResp();
+		 
+		 List<ContractCompayDTO> compayDTOs =commonService.getContractCompanyList();
+		 
+		 commonResp.setCompayDTOs(compayDTOs);
+	
+		 return commonResp;
+		}
+	 
+	 //getContractCompanyListSVC
 	 
 	 //fetchTempUserNotes
 	 

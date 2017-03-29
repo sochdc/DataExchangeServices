@@ -35,9 +35,12 @@ public class OnboardApprovalPendingEntity implements java.io.Serializable {
 	private TempUserEntity tempUserEntity;
 	private UserEntity userEntity;
 	private Date requestDate;
+	private Date approveDate;
 	private String requestType;
 	private boolean pendingApproval;
+	private Integer level;
 	
+	private Integer roleID;
 	
 	
 	@Column(name = "pending_approval", length = 1)
@@ -119,5 +122,35 @@ public class OnboardApprovalPendingEntity implements java.io.Serializable {
     public void setRequestDate(Date requestDate) {
         this.requestDate = requestDate;
     }
+    
+    @Column(name="level")
+	public Integer getLevel() {
+		return level;
+	}
+
+	public void setLevel(Integer level) {
+		this.level = level;
+	}
+	
+	@Column(name="roleId")
+	public Integer getRoleID() {
+		return roleID;
+	}
+
+	public void setRoleID(Integer roleID) {
+		this.roleID = roleID;
+	}
+	
+	@Column(name="approve_date")
+	public Date getApproveDate() {
+		return approveDate;
+	}
+
+	public void setApproveDate(Date approveDate) {
+		this.approveDate = approveDate;
+	}
+    
+	
+    
 
 }

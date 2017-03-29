@@ -6,10 +6,13 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 
+import javax.persistence.CascadeType;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.FetchType;
 import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
 import javax.persistence.OneToMany;
 import javax.persistence.Table;
 import javax.persistence.Temporal;
@@ -32,17 +35,24 @@ public class TempUserEntity implements java.io.Serializable {
 	private String workEmailId;
 	private String workPhoneNumber;
 	private String startDate;
-	private Integer userRoleId;
 	private Integer approvalLevel;
 	private String createdBy;
+	private Date createdTs;
 	private boolean pendingApproval;
 	private Set<OnboardingUserNotesEntity> onboardingUserNotesEntities = new HashSet<OnboardingUserNotesEntity>(0);
 	private Set<OnboardApprovalPendingEntity> onboardApprovalPendingEntities = new HashSet<OnboardApprovalPendingEntity>(0);
 	private Set<UserFileEntity> userFileEntities = new HashSet<UserFileEntity>(0);
+	private Set<TempUserRoleEntity> tempUserRoleEntities = new HashSet<TempUserRoleEntity>(0);
+	private String accountType;
+	private ContractCompanyEntity contractCompanyEntity;
+	private String endDate;
+	
+	private String reportingTo;
+	
 
 	
 	
-	@OneToMany(fetch = FetchType.LAZY, mappedBy = "tempUserEntity")
+	@OneToMany(fetch = FetchType.LAZY, mappedBy = "tempUserEntity",cascade=CascadeType.ALL)
 	public Set<OnboardingUserNotesEntity> getOnboardingUserNotesEntities() {
 		return onboardingUserNotesEntities;
 	}
@@ -51,7 +61,7 @@ public class TempUserEntity implements java.io.Serializable {
 		this.onboardingUserNotesEntities = onboardingUserNotesEntities;
 	}
 	
-	@OneToMany(fetch = FetchType.LAZY, mappedBy = "tempUserEntity")
+	@OneToMany(fetch = FetchType.LAZY, mappedBy = "tempUserEntity",cascade=CascadeType.ALL)
 	public Set<OnboardApprovalPendingEntity> getOnboardApprovalPendingEntities() {
 		return onboardApprovalPendingEntities;
 	}
@@ -98,7 +108,6 @@ public class TempUserEntity implements java.io.Serializable {
 		this.workEmailId = workEmailId;
 		this.workPhoneNumber = workPhoneNumber;
 		this.startDate = startDate;
-		this.userRoleId = userRoleId;
 	}
 
 	@Id
@@ -192,15 +201,7 @@ public class TempUserEntity implements java.io.Serializable {
 		this.startDate = startDate;
 	}
 
-	@Column(name = "role_id")
-	public Integer getUserRoleId() {
-		return this.userRoleId;
-	}
 
-	public void setUserRoleId(Integer userRoleId) {
-		this.userRoleId = userRoleId;
-	}
-	
 	@Column(name = "approval_level")
 	public Integer getApprovalLevel() {
 		return this.approvalLevel;
@@ -210,7 +211,7 @@ public class TempUserEntity implements java.io.Serializable {
 	        this.approvalLevel = approvalLevel;
 	}
 	
-	@OneToMany(fetch=FetchType.LAZY, mappedBy="tempUserEntity")
+	@OneToMany(fetch=FetchType.LAZY, mappedBy="tempUserEntity",cascade=CascadeType.ALL)
 	public Set<UserFileEntity> getUserFileEntities() {
 		return userFileEntities;
 	}
@@ -218,6 +219,63 @@ public class TempUserEntity implements java.io.Serializable {
 	public void setUserFileEntities(Set<UserFileEntity> userFileEntities) {
 		this.userFileEntities = userFileEntities;
 	}
+	
+	@Column(name = "account_type", length = 45)
+	public String getAccountType() {
+		return this.accountType;
+	}
+
+	public void setAccountType(String accountType) {
+		this.accountType = accountType;
+	}
+	
+	@OneToMany(fetch = FetchType.LAZY, mappedBy = "tempUserEntity",cascade=CascadeType.ALL)
+	public Set<TempUserRoleEntity> getTempUserRoleEntities() {
+		return tempUserRoleEntities;
+	}
+
+	public void setTempUserRoleEntities(Set<TempUserRoleEntity> tempUserRoleEntities) {
+		this.tempUserRoleEntities = tempUserRoleEntities;
+	}
+	
+	@Temporal(TemporalType.TIMESTAMP)
+	@Column(name = "created_ts", length = 19)
+	public Date getCreatedTs() {
+		return this.createdTs;
+	}
+
+	public void setCreatedTs(Date createdTs) {
+		this.createdTs = createdTs;
+	}
+	
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "CONTRACT_COMPANY_ID")
+	public ContractCompanyEntity getContractCompanyEntity() {
+		return contractCompanyEntity;
+	}
+
+	public void setContractCompanyEntity(ContractCompanyEntity contractCompanyEntity) {
+		this.contractCompanyEntity = contractCompanyEntity;
+	}
+	
+	@Column(name = "endDate", length = 45)
+	public String getEndDate() {
+		return endDate;
+	}
+
+	public void setEndDate(String endDate) {
+		this.endDate = endDate;
+	}
+	
+	@Column(name="REPORTING_TO")
+	public String getReportingTo() {
+		return reportingTo;
+	}
+
+	public void setReportingTo(String reportingTo) {
+		this.reportingTo = reportingTo;
+	}
+	
 	
 	
 

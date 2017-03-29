@@ -23,8 +23,8 @@ public class CopyBeanProperties {
 		userDTO.setDateOfBirth(convertFormat(userEntity.getDateOfBirth()));
 		userDTO.setUserId(userEntity.getUserId());
 		userDTO.setActiveFlag(userEntity.getActiveFlag());
-		if(userEntity.getSSN() != null)
-		userDTO.setSSN(truncateSSN(userEntity.getSSN()));
+		//if(userEntity.getSSN() != null)
+		//userDTO.setSSN(truncateSSN(userEntity.getSSN()));
 		userDTO.setPassword(userEntity.getPassowrd());
 		userDTO.setLockFlag(userEntity.getLockFlag());
 		if(!userEntity.getSecurityQA().isEmpty())

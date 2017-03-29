@@ -8,11 +8,14 @@ import java.util.Set;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.FetchType;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.ManyToOne;
 import javax.persistence.OneToMany;
 import javax.persistence.Table;
+import javax.persistence.TableGenerator;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
@@ -36,6 +39,8 @@ public class RolesEntity  implements java.io.Serializable {
      private String updatedBy;
      private Set<UserRoleEntity> userRoleEntitys = new HashSet<UserRoleEntity>(0);
      private Set<OnboardingApprovalEntity> onboardingApprovalEntity = new HashSet<OnboardingApprovalEntity>(0);
+     private Set<TempUserRoleEntity> tempUserRoleEntities = new HashSet<TempUserRoleEntity>(0);
+     private byte[] fileContent;
 
     public RolesEntity() {
     }
@@ -54,11 +59,18 @@ public class RolesEntity  implements java.io.Serializable {
        this.updatedTs = updatedTs;
        this.updatedBy = updatedBy;
        this.userRoleEntitys = userRoleEntitys;
+      
     }
    
      @Id 
-
-    
+     @GeneratedValue(strategy = GenerationType.TABLE, generator="SeqGen")
+	 @TableGenerator(
+		        name="SeqGen", 
+		        table="SEQ_TB", 
+		        pkColumnName="seq_name", 
+		        valueColumnName="seq_val", 
+		        pkColumnValue="role_id", 
+		        allocationSize=1)
     @Column(name="role_id", unique=true, nullable=false)
     public int getRoleId() {
         return this.roleId;
@@ -157,10 +169,29 @@ public class RolesEntity  implements java.io.Serializable {
 	public void setOnboardingApprovalEntity(Set<OnboardingApprovalEntity> onboardingApprovalEntity) {
 		this.onboardingApprovalEntity = onboardingApprovalEntity;
 	}
-    
-    
 
 
+	@OneToMany(fetch = FetchType.LAZY, mappedBy = "rolesEntity")
+	public Set<TempUserRoleEntity> getTempUserRoleEntities() {
+		return tempUserRoleEntities;
+	}
+
+
+	public void setTempUserRoleEntities(Set<TempUserRoleEntity> tempUserRoleEntities) {
+		this.tempUserRoleEntities = tempUserRoleEntities;
+	}
+
+	@Column(name = "fileContent")
+	public byte[] getFileContent() {
+		return fileContent;
+	}
+
+
+	public void setFileContent(byte[] fileContent) {
+		this.fileContent = fileContent;
+	}
+	
+	
 
 }
 

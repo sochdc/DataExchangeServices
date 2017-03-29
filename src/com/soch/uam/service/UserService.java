@@ -7,6 +7,7 @@ import com.soch.uam.domain.OnboardApprovalPendingEntity;
 import com.soch.uam.domain.TempUserEntity;
 import com.soch.uam.dto.ConfigDTO;
 import com.soch.uam.dto.OnboardApprovalPendingDTO;
+import com.soch.uam.dto.OnboardingApprovalDTO;
 import com.soch.uam.dto.OnboardingUserNotesDTO;
 import com.soch.uam.dto.TempUserDTO;
 import com.soch.uam.dto.UserDTO;
@@ -51,7 +52,7 @@ public interface UserService {
 		
 		public UserSVCResp getPasswordPolicy();
 		
-		public void onBoardingUser(OnboardingReq onboardingReq);
+		public Integer onBoardingUser(OnboardingReq onboardingReq);
 		
 		public Set<OnboardApprovalPendingDTO> getPendingReq(int userId);
 		
@@ -62,4 +63,6 @@ public interface UserService {
 		
 		public Set<OnboardingUserNotesDTO> getTempUserNotes(String id);
 		//getOnboardUser
+		public boolean validateToken(String token, Integer userId);
+		public Set<OnboardingApprovalDTO>  getApprovalList(Integer roleId);
 }

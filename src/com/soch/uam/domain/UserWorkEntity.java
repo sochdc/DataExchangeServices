@@ -2,6 +2,8 @@
 // Generated Feb 9, 2017 12:28:59 PM by Hibernate Tools 4.3.5.Final
 package com.soch.uam.domain;
 import java.util.Date;
+
+import javax.persistence.CascadeType;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.FetchType;
@@ -26,6 +28,8 @@ public class UserWorkEntity implements java.io.Serializable {
 	private int deptId;
 	private String empId;
 	private String emailAddress;
+	private String reportingTo;
+	private ContractCompanyEntity contractCompanyEntity;
 
 	public UserWorkEntity() {
 	}
@@ -97,5 +101,29 @@ public class UserWorkEntity implements java.io.Serializable {
 	public void setEmailAddress(String emailAddress) {
 		this.emailAddress = emailAddress;
 	}
+
+	@Column(name = "REPORTING_TO", length = 50)
+	public String getReportingTo() {
+		return reportingTo;
+	}
+
+
+	public void setReportingTo(String reportingTo) {
+		this.reportingTo = reportingTo;
+	}
+
+	
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "CONTRACT_COMPANY_ID")
+	public ContractCompanyEntity getContractCompanyEntity() {
+		return contractCompanyEntity;
+	}
+
+
+	public void setContractCompanyEntity(ContractCompanyEntity contractCompanyEntity) {
+		this.contractCompanyEntity = contractCompanyEntity;
+	}
+	
+	
 
 }

@@ -7,12 +7,15 @@ import com.soch.uam.domain.ConfigEntity;
 import com.soch.uam.domain.DemoUserEntity;
 import com.soch.uam.domain.LoginEntity;
 import com.soch.uam.domain.OTPEntity;
+import com.soch.uam.domain.OnboardApprovalAuditEntity;
 import com.soch.uam.domain.OnboardApprovalPendingEntity;
 import com.soch.uam.domain.OnboardingUserNotesEntity;
 import com.soch.uam.domain.PolicyConfigEntity;
+import com.soch.uam.domain.PolicySrcEntity;
 import com.soch.uam.domain.QuestionaireEntity;
 import com.soch.uam.domain.SecauthtokenEntity;
 import com.soch.uam.domain.TempUserEntity;
+import com.soch.uam.domain.TempUserRoleEntity;
 import com.soch.uam.domain.UserEntity;
 import com.soch.uam.domain.UserRoleEntity;
 import com.soch.uam.dto.OnboardingUserNotesDTO;
@@ -39,7 +42,7 @@ public interface UserDAO {
 	
 	public List<QuestionaireEntity> getQuestionnaire();
 	
-	public List<PolicyConfigEntity> getPolicies();
+	public List<PolicySrcEntity> getPolicies();
 	
 	public void saveOTP(OTPEntity otpEntity);
 	
@@ -55,17 +58,27 @@ public interface UserDAO {
 	
 	public void addTempUser(TempUserEntity tempUserEntity);
 	
-	public List<OnboardApprovalPendingEntity> fetchUserPendingRequest(int userId);
+	public List<OnboardApprovalPendingEntity> fetchUserPendingRequest(Integer userId);
 	
 	public TempUserEntity getTempUser(String userId);
 	
 	public void updateTempUser(TempUserEntity tempUserEntity);
 	
-	public OnboardApprovalPendingEntity getOnboardApprovalPendingEntity(String employeeId);
+	public OnboardApprovalPendingEntity getOnboardApprovalPendingEntity(String employeeId, int approverId);
 	
 	public void updateOnboardApprovalPendingEntity(OnboardApprovalPendingEntity onboardApprovalPendingEntity);
 	
 	public List<OnboardingUserNotesEntity> getOnboardingUserNotes(String id);
+
+	public void saveOnboardingApprovalAudit(OnboardApprovalAuditEntity onboardApprovalAuditEntity);
+
+	UserEntity getUser(Integer id);
+
+	public void saveTempUserRole(TempUserRoleEntity tempUserRoleEntity);
+
+	public void saveOnboardApprovalPendingEntity(OnboardApprovalPendingEntity onboardApprovalPendingEntity);
+
+	public List<OnboardApprovalPendingEntity> getOnboardApprovalPendingEntity(String employeeId);
 	
 	
 	//getTempUser

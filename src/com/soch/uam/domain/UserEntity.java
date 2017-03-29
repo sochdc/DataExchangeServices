@@ -105,10 +105,10 @@ public class UserEntity implements Serializable{
 	@OrderBy("loginTs desc")
 	private Set<LoginEntity> logintEntity;
 	
-	@OneToMany(fetch = FetchType.LAZY, mappedBy = "userEntity")
+	@OneToMany(fetch = FetchType.LAZY, mappedBy = "userEntity",cascade = CascadeType.ALL)
 	private Set<UserRoleEntity> userRoleEntities = new HashSet<UserRoleEntity>(0);
 	
-	@OneToOne(fetch = FetchType.LAZY, mappedBy = "userEntity")
+	@OneToOne(fetch = FetchType.LAZY, mappedBy = "userEntity",cascade=CascadeType.ALL)
 	private UserWorkEntity userWorkEntity;
 	
 	@OneToMany(fetch = FetchType.LAZY, mappedBy = "userEntity")
