@@ -7,10 +7,13 @@ import com.soch.uam.domain.OnboardApprovalPendingEntity;
 import com.soch.uam.domain.TempUserEntity;
 import com.soch.uam.dto.ConfigDTO;
 import com.soch.uam.dto.OnboardApprovalPendingDTO;
+import com.soch.uam.dto.OnboardApprovedDTO;
 import com.soch.uam.dto.OnboardingApprovalDTO;
 import com.soch.uam.dto.OnboardingUserNotesDTO;
 import com.soch.uam.dto.TempUserDTO;
 import com.soch.uam.dto.UserDTO;
+import com.soch.uam.request.AddUserRoleReq;
+import com.soch.uam.request.UserProfileResp;
 import com.soch.uam.response.OnboardingReq;
 import com.soch.uam.response.UserReq;
 import com.soch.uam.response.UserSVCResp;
@@ -37,16 +40,16 @@ public interface UserService {
 		
 		public boolean validateDemoUser(UserDTO user);
 		
-		public boolean resetPwd(UserDTO user);
+		public int resetPwd(UserDTO user);
 		
 		public boolean forcePWDChange();
 		
-		public UserDTO searchUser(UserReq userReq);
+		public UserProfileResp searchUser(UserReq userReq);
 		
-		public UserDTO changeUserStatus(String userId);
-		public UserDTO changeLockStatus(String userId);
+		public UserDTO changeUserStatus(UserReq userReq);
+		public UserDTO changeLockStatus(UserReq userReq);
 		
-		public UserDTO resetUserPwd(String userId);
+		public UserDTO resetUserPwd(UserReq userReq);
 		
 		public void logOut(String token);
 		
@@ -64,5 +67,18 @@ public interface UserService {
 		public Set<OnboardingUserNotesDTO> getTempUserNotes(String id);
 		//getOnboardUser
 		public boolean validateToken(String token, Integer userId);
+		
 		public Set<OnboardingApprovalDTO>  getApprovalList(Integer roleId);
+		
+		public UserProfileResp addRole(AddUserRoleReq addUserRoleReq);
+		
+		public UserProfileResp getUserProfile(int id);
+		
+		public UserProfileResp deleteRole(Integer userRoleId);
+		
+		public boolean refreshToken(String token, Integer userId);
+		List<OnboardApprovedDTO> getApprovedRequests(int userId);
+		Set<OnboardApprovalPendingDTO> getCreatedBy(int userId);
+		
+		List<UserDTO> getUsers();
 }

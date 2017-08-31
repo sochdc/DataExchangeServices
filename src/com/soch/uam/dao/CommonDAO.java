@@ -4,15 +4,19 @@ import java.util.List;
 
 import com.soch.uam.domain.ContractCompanyEntity;
 import com.soch.uam.domain.DeptEntity;
+import com.soch.uam.domain.DocumentsEntity;
 import com.soch.uam.domain.OnboardApprovalPendingEntity;
 import com.soch.uam.domain.OnboardingApprovalEntity;
 import com.soch.uam.domain.OnboardingUserNotesEntity;
 import com.soch.uam.domain.PolicyConfigEntity;
 import com.soch.uam.domain.PolicyGrpEntity;
 import com.soch.uam.domain.PolicySrcEntity;
+import com.soch.uam.domain.PolicySrcNotesEntity;
+import com.soch.uam.domain.RoleMappingEntity;
 import com.soch.uam.domain.RolesEntity;
 import com.soch.uam.domain.SystemEntity;
 import com.soch.uam.domain.UserFileEntity;
+import com.soch.uam.domain.UserNotesEntity;
 import com.soch.uam.domain.UserTypeEntity;
 
 public interface CommonDAO {
@@ -88,6 +92,27 @@ public interface CommonDAO {
 	public int getOnboardApprovalMaxLevel(Integer roleID);
 
 	public OnboardingApprovalEntity getOnboardApproval(Integer roleID, int approveLevel);
+
+	public void saveuserNotes(UserNotesEntity userNotesEntity);
+
+	public List<RoleMappingEntity> getRoleMapping();
+
+	public void savePolicySrcNotes(PolicySrcNotesEntity policySrcNotesEntity);
+
+	public List<PolicySrcNotesEntity> getPolicyNotes(Integer policyId);
+
+	public List<RolesEntity> getAllRoles();
+	
+
+	public List<DocumentsEntity> getDashboardFiles();
+
+	public DocumentsEntity getDashboardFiles(int id);
+
+	public void updatedDashboardFile(DocumentsEntity documentsEntity) ;
+
+	public int saveDashboardFile(DocumentsEntity documentsEntity);
+
+	public DeptEntity getDepartment(String departmentName);
 
 
 }

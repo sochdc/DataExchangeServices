@@ -1,5 +1,6 @@
 package com.soch.uam.daoimpl;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
 
@@ -8,6 +9,7 @@ import org.hibernate.FetchMode;
 import org.hibernate.Hibernate;
 import org.hibernate.SessionFactory;
 import org.hibernate.criterion.MatchMode;
+import org.hibernate.criterion.Order;
 import org.hibernate.criterion.Restrictions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -22,10 +24,12 @@ import com.soch.uam.domain.OnboardApprovalPendingEntity;
 import com.soch.uam.domain.OnboardingUserNotesEntity;
 import com.soch.uam.domain.PolicyConfigEntity;
 import com.soch.uam.domain.PolicySrcEntity;
+import com.soch.uam.domain.PwdHistoryEntity;
 import com.soch.uam.domain.QuestionaireEntity;
 import com.soch.uam.domain.SecauthtokenEntity;
 import com.soch.uam.domain.TempUserEntity;
 import com.soch.uam.domain.TempUserRoleEntity;
+import com.soch.uam.domain.UserActivityEntity;
 import com.soch.uam.domain.UserEntity;
 import com.soch.uam.domain.UserRoleEntity;
 
@@ -255,10 +259,25 @@ public class UserDAOImpl implements UserDAO{
 
 	@Override
 	public TempUserEntity getTempUser(String userId) {
+		TempUserEntity tempUserEntity = null;
 		Criteria criteria = this.sessionFactory.getCurrentSession().createCriteria(TempUserEntity.class);
 		criteria.add(Restrictions.eq("employeeId", userId));
 		criteria.add(Restrictions.eq("pendingApproval", true));
-		return (TempUserEntity) criteria.list().get(0);
+		List<TempUserEntity> tempUserEntities = criteria.list();
+		if(!tempUserEntities.isEmpty())
+		tempUserEntity = (TempUserEntity) criteria.list().get(0);
+		return tempUserEntity;
+	}
+	
+	@Override
+	public TempUserEntity getApprovedTempUser(String userId) {
+		TempUserEntity tempUserEntity = null;
+		Criteria criteria = this.sessionFactory.getCurrentSession().createCriteria(TempUserEntity.class);
+		criteria.add(Restrictions.eq("employeeId", userId));
+		List<TempUserEntity> tempUserEntities = criteria.list();
+		if(!tempUserEntities.isEmpty())
+		tempUserEntity = (TempUserEntity) criteria.list().get(0);
+		return tempUserEntity;
 	}
 
 	@Override
@@ -272,9 +291,14 @@ public class UserDAOImpl implements UserDAO{
 	}
 
 	@Override
-	public OnboardApprovalPendingEntity getOnboardApprovalPendingEntity(String employeeId, int approverId) {
+	public OnboardApprovalPendingEntity getOnboardApprovalPendingEntity(String employeeId, int userid, int approverId) {
+		System.out.println("approverId "+approverId);
 		Criteria criteria = this.sessionFactory.getCurrentSession().createCriteria(OnboardApprovalPendingEntity.class);
-		criteria.add(Restrictions.eq("tempUserEntity.employeeId", employeeId));
+		if(employeeId != null)
+			criteria.add(Restrictions.eq("tempUserEntity.employeeId", employeeId));
+		else
+			criteria.add(Restrictions.eq("requestUserEntity.id", userid));
+		
 		criteria.add(Restrictions.eq("userEntity.id", approverId));
 		criteria.add(Restrictions.eq("pendingApproval", true));
 		return (OnboardApprovalPendingEntity) criteria.list().get(0);
@@ -317,6 +341,121 @@ public class UserDAOImpl implements UserDAO{
 		criteria.add(Restrictions.eq("tempUserEntity.employeeId", employeeId));
 		criteria.add(Restrictions.eq("pendingApproval", true));
 		return criteria.list();
+	}
+
+	@Override
+	public UserRoleEntity getUserRoleOnUserRoleId(Integer userRoleId) {
+		UserRoleEntity userRoleEntity = null;
+		Criteria criteria = this.sessionFactory.getCurrentSession().createCriteria(UserRoleEntity.class);
+		criteria.add(Restrictions.eq("userRoleId", userRoleId));
+		List<UserRoleEntity>  userRoleEntities = criteria.list();
+		if(userRoleEntities.size() >0)
+			userRoleEntity = userRoleEntities.get(0);
+		return userRoleEntity;
+	}
+
+	@Override
+	public boolean checkPreviousPassword(String passowrd, int Id,int count) {
+		// TODO Auto-generated method stub
+		Criteria criteria = this.sessionFactory.getCurrentSession().createCriteria(PwdHistoryEntity.class);
+		criteria.add(Restrictions.eq("userEntity.id", Id));
+		criteria.add(Restrictions.eq("password", passowrd));
+		criteria.addOrder(Order.desc("createdTs"));
+		criteria.setMaxResults(count);
+		List<PwdHistoryEntity>  pwdHistoryEntities = criteria.list();
+		if(pwdHistoryEntities.isEmpty())
+			return true;
+		else
+			return false;
+	}
+
+	@Override
+	public void saveUserActivity(UserActivityEntity userActivityEntity) {
+		this.sessionFactory.getCurrentSession().save(userActivityEntity);
+		
+	}
+
+	@Override
+	public List<OnboardApprovalAuditEntity> getApprovedRequests(String userId) {
+		Criteria criteria = this.sessionFactory.getCurrentSession().createCriteria(OnboardApprovalAuditEntity.class);
+		if(userId != null)
+			criteria.add(Restrictions.eq("userTbId", userId));
+		return criteria.list();
+	}
+
+	@Override
+	public List<OnboardApprovalPendingEntity> fetchUserRequestedBy(String userId) {
+		Criteria criteria = this.sessionFactory.getCurrentSession().createCriteria(OnboardApprovalPendingEntity.class,"pending");
+		
+
+		criteria.createAlias("pending.tempUserEntity", "tempUserEntity");
+		if(userId != null)
+			criteria.add(Restrictions.eq("tempUserEntity.createdBy", userId));
+		List<OnboardApprovalPendingEntity> onboardApprovalPendingEntities = criteria.list();
+		return onboardApprovalPendingEntities;
+	}
+
+	@Override
+	public List<UserEntity> getUsers() {
+		List<UserEntity> userList;
+		UserEntity userEntity = null;
+		Criteria criteria = this.sessionFactory.getCurrentSession().createCriteria(UserEntity.class);
+		criteria.add(Restrictions.eq("activeFlag", true));
+		//criteria.setFetchMode("address", FetchMode.JOIN);
+		//criteria.setFetchMode("securityQA", FetchMode.JOIN);
+		userList = criteria.list();
+		return userList;
+	}
+	
+	@Override
+	public List<OnboardApprovalPendingEntity> fetchUserPendingRequestsForReport(Integer userId,Date beginDate, Date endDate) {
+		Criteria criteria = this.sessionFactory.getCurrentSession().createCriteria(OnboardApprovalPendingEntity.class);
+		if(userId != 0)
+			criteria.add(Restrictions.eq("userEntity.id", userId));
+		if(beginDate != null)
+		{
+			criteria.add(Restrictions.ge("requestDate", beginDate));
+			criteria.add(Restrictions.le("requestDate", beginDate));
+		}
+		List<OnboardApprovalPendingEntity> onboardApprovalPendingEntities = criteria.list();
+		return onboardApprovalPendingEntities;
+	}
+
+	@Override
+	public List<OnboardApprovalAuditEntity> getApprovedRequestsForReport(int userId, Date beginDate, Date endDate) {
+		Criteria criteria = this.sessionFactory.getCurrentSession().createCriteria(OnboardApprovalAuditEntity.class);
+		if(userId != 0)
+			criteria.add(Restrictions.eq("userTbId", getUser(userId).getUserId()));
+		if(beginDate != null)
+		{
+			criteria.add(Restrictions.ge("aprovedOn", beginDate));
+			criteria.add(Restrictions.le("aprovedOn", beginDate));
+		}
+		return criteria.list();
+	}
+
+	@Override
+	public List<OnboardApprovalPendingEntity> fetchUserRequestedByForReport(int userId, Date beginDate, Date endDate) {
+		Criteria criteria = this.sessionFactory.getCurrentSession().createCriteria(OnboardApprovalPendingEntity.class,"pending");
+		criteria.createAlias("pending.tempUserEntity", "tempUserEntity");
+		if(userId != 0)
+			criteria.add(Restrictions.eq("tempUserEntity.createdBy",  getUser(userId).getUserId()));
+		if(beginDate != null)
+		{
+			criteria.add(Restrictions.ge("requestDate", beginDate));
+			criteria.add(Restrictions.le("requestDate", beginDate));
+		}
+		List<OnboardApprovalPendingEntity> onboardApprovalPendingEntities = criteria.list();
+		return onboardApprovalPendingEntities;
+	}
+
+	@Override
+	public List<TempUserEntity> getTempUsersCreatedBy(String userId) {
+		TempUserEntity tempUserEntity = null;
+		Criteria criteria = this.sessionFactory.getCurrentSession().createCriteria(TempUserEntity.class);
+		criteria.add(Restrictions.eq("createdBy", userId));
+		List<TempUserEntity> tempUserEntities = criteria.list();
+		return tempUserEntities;
 	}
 
 }

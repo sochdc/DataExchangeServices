@@ -31,6 +31,7 @@ import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
+import com.soch.isvc.entities.NotesEntity;
 import com.soch.uam.dao.CommonDAO;
 import com.soch.uam.dao.UserDAO;
 import com.soch.uam.domain.AddressEntity;
@@ -43,19 +44,23 @@ import com.soch.uam.domain.OnboardApprovalPendingEntity;
 import com.soch.uam.domain.OnboardingApprovalEntity;
 import com.soch.uam.domain.OnboardingUserNotesEntity;
 import com.soch.uam.domain.PolicySrcEntity;
+import com.soch.uam.domain.PwdHistoryEntity;
 import com.soch.uam.domain.QuestionaireEntity;
 import com.soch.uam.domain.RolesEntity;
 import com.soch.uam.domain.SecauthtokenEntity;
 import com.soch.uam.domain.SecurityQAEntity;
 import com.soch.uam.domain.TempUserEntity;
 import com.soch.uam.domain.TempUserRoleEntity;
+import com.soch.uam.domain.UserActivityEntity;
 import com.soch.uam.domain.UserEntity;
 import com.soch.uam.domain.UserFileEntity;
+import com.soch.uam.domain.UserNotesEntity;
 import com.soch.uam.domain.UserRoleEntity;
 import com.soch.uam.domain.UserWorkEntity;
 import com.soch.uam.dto.AddressDTO;
 import com.soch.uam.dto.ConfigDTO;
 import com.soch.uam.dto.OnboardApprovalPendingDTO;
+import com.soch.uam.dto.OnboardApprovedDTO;
 import com.soch.uam.dto.OnboardingApprovalDTO;
 import com.soch.uam.dto.OnboardingUserNotesDTO;
 import com.soch.uam.dto.RoleDTO;
@@ -63,7 +68,9 @@ import com.soch.uam.dto.SecurityQADTO;
 import com.soch.uam.dto.TempUserDTO;
 import com.soch.uam.dto.UserDTO;
 import com.soch.uam.exception.InternalErrorException;
+import com.soch.uam.request.AddUserRoleReq;
 import com.soch.uam.request.ContactUsReq;
+import com.soch.uam.request.UserProfileResp;
 import com.soch.uam.response.OnboardingReq;
 import com.soch.uam.response.OnboardingUserFile;
 import com.soch.uam.response.UserReq;
@@ -75,6 +82,9 @@ import com.soch.uam.util.CopyBeanProperties;
 import com.soch.uam.util.OTPGenerator;
 import com.soch.uam.util.POJOCacheUtil;
 import com.soch.uam.util.SendEmail;
+
+import nl.flotsam.xeger.Xeger;
+import oracle.net.aso.p;
 
 @Service("userService")
 @PropertySource(value = { "classpath:application.properties"})
@@ -100,7 +110,7 @@ public class UserServiceImpl implements UserService{
 	 private static Map<Integer, QuestionaireEntity> questionaireMap = new HashMap<Integer, QuestionaireEntity>();
 	 
 	 private static Map<String, Object> policyMap = new HashMap<String, Object>();
-	 
+	 private static Map<String, Object> externalPolicyMap = new HashMap<String, Object>();
 	 private static Map<String, Object> fgtPWDCount = new HashMap<String, Object>();
 	 
 	@Override
@@ -237,6 +247,19 @@ public class UserServiceImpl implements UserService{
 		return null;
 	}
 	
+	private Date convertCalDate(String javaDate)
+	{
+		SimpleDateFormat javaDateFormat = new SimpleDateFormat("MM/dd/yyyy");
+		try {
+			Date date = javaDateFormat.parse(javaDate);
+			return date;
+		} catch (ParseException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return null;
+	}
+	
 	/**
 	 * 
 	 * @param userEntity
@@ -316,11 +339,13 @@ public class UserServiceImpl implements UserService{
 		UserEntity userEntity = null;
 		UserDTO returnUserDTO = new UserDTO();
 		userEntity = userDAO.getUser(userDTO.getUserId());
-		returnUserDTO.setId(userEntity.getId());
-		System.out.println(returnUserDTO.getId());
+		UserActivityEntity userActivityEntity = new UserActivityEntity();
+		
 		//Map<String, String> cacheMap = pojoCacheUtil.getAppConfig();
 		if(userEntity!= null )
 		{
+			returnUserDTO.setId(userEntity.getId());
+			System.out.println(returnUserDTO.getId());
 			returnUserDTO.setActiveFlag(userEntity.getActiveFlag());
 			if(userEntity.getLockFlag())
 			{
@@ -349,6 +374,40 @@ public class UserServiceImpl implements UserService{
 			String authToken =generateAuthToken(userEntity);
 			returnUserDTO = CopyBeanProperties.copyUserPerperties(userEntity);
 			returnUserDTO.setToken(authToken);
+			Set<UserRoleEntity> userRoleEntities = userEntity.getUserRoleEntities();
+			for(UserRoleEntity userRoleEntity :userRoleEntities)
+			{
+				if(userRoleEntity.isActiveStatus()){
+				if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Admin"))
+				{
+					returnUserDTO.setRoleName(userRoleEntity.getRolesEntity().getRoleName());
+						returnUserDTO.setAccess(1);
+						break;
+				}
+				else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Requestor"))
+				{
+					returnUserDTO.setAccess(2);
+					break;
+				}
+				else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Approve"))
+				{
+					returnUserDTO.setAccess(3);
+					break;
+				}
+				else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Implementor"))
+				{
+					returnUserDTO.setAccess(3);
+					break;
+				}
+				else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Report"))
+				{
+					returnUserDTO.setDepartment(userRoleEntity.getRolesEntity().getSystemEntity().getDeptEntity().getDeptName());
+					returnUserDTO.setRoleName(userRoleEntity.getRolesEntity().getRoleName());
+					break;
+				}
+				}
+				
+			}
 			
 			LoginEntity loginEntity = new LoginEntity();
 			loginEntity.setUserEntity(userEntity);
@@ -369,7 +428,12 @@ public class UserServiceImpl implements UserService{
 				userEntity.setLoginFailureCount(0);
 				userDAO.updateUser(userEntity);
 			}
-				
+			userActivityEntity.setUserEntity(userEntity);
+			userActivityEntity.setActivityType(APPConstants.LOGIN_SUCCESS_ACTIVITY);
+			userActivityEntity.setActivityCreateTs(new Date());
+			userActivityEntity.setActivityCreatedBy(userEntity.getUserId());
+			userActivityEntity.setActivityStatus(true);
+			userDAO.saveUserActivity(userActivityEntity);
 			}
 			else
 			{
@@ -385,7 +449,12 @@ public class UserServiceImpl implements UserService{
 					returnUserDTO.setId(userEntity.getId());
 				}
 				userDAO.updateUser(userEntity);
-				
+				userActivityEntity.setUserEntity(userEntity);
+				userActivityEntity.setActivityType(APPConstants.LOGIN_FAIL_ACTIVITY);
+				userActivityEntity.setActivityCreateTs(new Date());
+				userActivityEntity.setActivityCreatedBy(userEntity.getUserId());
+				userActivityEntity.setActivityStatus(false);
+				userDAO.saveUserActivity(userActivityEntity);
 			}
 		}
 		else
@@ -435,10 +504,18 @@ public class UserServiceImpl implements UserService{
 		boolean returnVal = false;
 		String userId = null;
 		userId = userDAO.getUserIdOnEmail(emailId);
+		UserActivityEntity userActivityEntity = null;
 		if(userId!= null)
 		{
 			returnVal = true;
 			sendForgotUserIDEmail(userId, emailId);
+			UserEntity userEntity = userDAO.getUser(userId);
+			userActivityEntity = new UserActivityEntity();
+			userActivityEntity.setUserEntity(userEntity);
+			userActivityEntity.setActivityType(APPConstants.FORGOT_USER_ACTIVITY);
+			userActivityEntity.setActivityCreateTs(new Date());
+			userActivityEntity.setActivityCreatedBy(userEntity.getUserId());
+			userDAO.saveUserActivity(userActivityEntity);
 		}
 		
 		return returnVal;
@@ -463,7 +540,7 @@ public class UserServiceImpl implements UserService{
 		UserDTO userDTO = new UserDTO();
 		Set<SecurityQADTO> securityQADTOs = new HashSet<SecurityQADTO>();
 		Set<SecurityQADTO> securityQADTOs2 = new HashSet<SecurityQADTO>();
-		
+		UserActivityEntity userActivityEntity = null;
 		//userDTO = userMap.get(userId);
 		
 			
@@ -490,6 +567,13 @@ public class UserServiceImpl implements UserService{
 				securityQADTOs2.add(securityQADTO);
 				
 				userDTO.setSecurityQA(securityQADTOs2);
+				
+				userActivityEntity = new UserActivityEntity();
+				userActivityEntity.setUserEntity(userEntity);
+				userActivityEntity.setActivityType(APPConstants.FORGOT_USER_PASSWORD);
+				userActivityEntity.setActivityCreateTs(new Date());
+				userActivityEntity.setActivityCreatedBy(userEntity.getUserId());
+				userDAO.saveUserActivity(userActivityEntity);
 			}
 		
 		
@@ -632,6 +716,33 @@ public class UserServiceImpl implements UserService{
 			}
 		
 	}
+	
+	
+	private void getInternalPolicies()
+	{
+		List<PolicySrcEntity> policyConfigEntities = userDAO.getPolicies();
+		
+			for(PolicySrcEntity policyConfigEntity : policyConfigEntities)
+			{
+				if(policyConfigEntity.getPolicyGrpEntity().getUserTypeEntity().getTypeName().equalsIgnoreCase("internal"))
+					policyMap.put(policyConfigEntity.getPolicyName(), policyConfigEntity.getCustomVal());
+				if(policyConfigEntity.getPolicyGrpEntity().getUserTypeEntity().getTypeName().equalsIgnoreCase("External"))
+					externalPolicyMap.put(policyConfigEntity.getPolicyName(), policyConfigEntity.getCustomVal());
+			}
+		
+	}
+	
+	/*private void getExternalPolicies()
+	{
+		List<PolicySrcEntity> policyConfigEntities = userDAO.getPolicies();
+		
+			for(PolicySrcEntity policyConfigEntity : policyConfigEntities)
+			{
+				if(policyConfigEntity.getPolicyGrpEntity().getUserTypeEntity().getTypeName().equalsIgnoreCase("External"))
+					externalPolicyMap.put(policyConfigEntity.getPolicyName(), policyConfigEntity.getCustomVal());
+			}
+		
+	}*/
 
 	@Override
 	@Transactional
@@ -746,21 +857,49 @@ public class UserServiceImpl implements UserService{
 
 	@Override
 	@Transactional
-	public boolean resetPwd(UserDTO user) {
+	public int resetPwd(UserDTO user) {
+		PwdHistoryEntity pwdHistoryEntity = null;
+		Set<PwdHistoryEntity> pwdHistoryEntities = null;
 		SecauthtokenEntity secauthtokenEntity = userDAO.getAuthToken(user.getToken());
 		if(secauthtokenEntity != null) {
 		UserEntity userEntity = secauthtokenEntity.getUserEntity();
 		userEntity.setPwdChangeFlag(false);
-		userEntity.setPassowrd(user.getPassowrd());
-		secauthtokenEntity.setUserEntity(userEntity);
-		secauthtokenEntity.setStatus(false);
-		//userDAO.updateUser(userEntity);
-		userDAO.updateAuthToken(secauthtokenEntity);
-		return true;
+		UserActivityEntity userActivityEntity = null;
+		getPolicies();
+		int count = Integer.parseInt(policyMap.get("New Password Cannot Contain (x) Characters From Any Previous Password").toString());
+		
+		if(userDAO.checkPreviousPassword(user.getPassowrd(),userEntity.getId(),count))
+		{
+			userEntity.setPassowrd(user.getPassowrd());
+			secauthtokenEntity.setUserEntity(userEntity);
+			pwdHistoryEntity =  new PwdHistoryEntity();
+			pwdHistoryEntity.setCreatedTs(new Date());
+			pwdHistoryEntity.setPassword(user.getPassowrd());
+			pwdHistoryEntity.setUserEntity(userEntity);
+			pwdHistoryEntity.setCreatedBy(userEntity.getUserId());
+			secauthtokenEntity.setStatus(false);
+			pwdHistoryEntities = userEntity.getPwdHistoryEntities();
+			pwdHistoryEntities.add(pwdHistoryEntity);
+			userDAO.updateUser(userEntity);
+			userDAO.updateAuthToken(secauthtokenEntity);
+			
+			userActivityEntity = new UserActivityEntity();
+			userActivityEntity.setUserEntity(userEntity);
+			userActivityEntity.setActivityType(APPConstants.PASSWORD_RESET_ACTIVITY);
+			userActivityEntity.setActivityCreateTs(new Date());
+			userActivityEntity.setActivityCreatedBy(userEntity.getUserId());
+			userDAO.saveUserActivity(userActivityEntity);
+			
+			return 0;
+			}
+			else
+			{
+				return 1;
+			}
 		}
 		else
 		{
-			return false;
+			return 2;
 		}
 	}
 
@@ -789,26 +928,39 @@ public class UserServiceImpl implements UserService{
 
 	@Override
 	@Transactional
-	public UserDTO searchUser(UserReq userReq) {
+	public UserProfileResp searchUser(UserReq userReq) {
 		UserEntity userEntity =  userDAO.getUser(userReq.getUserId());
-		UserDTO userDTO = null;
+		UserProfileResp userProfileResp = new UserProfileResp();
 		if(userEntity != null)
 		{
-			userDTO = CopyBeanProperties.copyUserPerperties(userEntity);
+			userProfileResp = CopyBeanProperties.createUserProfile(userEntity);
 		}
-		return userDTO;
+		return userProfileResp;
 	}
 
 	@Override
 	@Transactional
-	public UserDTO changeUserStatus(String userId) {
+	public UserDTO changeUserStatus(UserReq userReq) {
 		UserDTO userDTO = null;
 		
-		UserEntity userEntity= userDAO.getUser(userId);
+		UserEntity userEntity= userDAO.getUser(userReq.getEditUserId());
 		if(userEntity.getActiveFlag())
 			userEntity.setActiveFlag(false);
 		else
 			userEntity.setActiveFlag(true);
+		
+		
+		UserNotesEntity userNotesEntity = new UserNotesEntity();
+		userNotesEntity.setNotes(userReq.getNotes());
+		userNotesEntity.setCreatedBy(userReq.getNotesuserId());
+		userNotesEntity.setCreatedTs(new Date());
+		userNotesEntity.setUserEntity(userEntity);
+		
+		Set<UserNotesEntity> userNotesEntities = new HashSet<UserNotesEntity>(0);
+		userNotesEntities.add(userNotesEntity);
+		userEntity.setUserNotesEntities(userNotesEntities);
+		
+		
 		userDAO.updateUser(userEntity);
 		userDTO = CopyBeanProperties.copyUserPerperties(userEntity);
 		return userDTO;
@@ -816,10 +968,10 @@ public class UserServiceImpl implements UserService{
 
 	@Override
 	@Transactional
-	public UserDTO changeLockStatus(String userId) {
+	public UserDTO changeLockStatus(UserReq userReq) {
 		UserDTO userDTO = null;
 
-		UserEntity userEntity = userDAO.getUser(userId);
+		UserEntity userEntity = userDAO.getUser(userReq.getEditUserId());
 		if (userEntity.getLockFlag())
 		{
 			userEntity.setLockFlag(false);
@@ -827,6 +979,17 @@ public class UserServiceImpl implements UserService{
 		}
 		else
 			userEntity.setLockFlag(true);
+		
+		UserNotesEntity userNotesEntity = new UserNotesEntity();
+		userNotesEntity.setNotes(userReq.getNotes());
+		userNotesEntity.setCreatedBy(userReq.getNotesuserId());
+		userNotesEntity.setCreatedTs(new Date());
+		userNotesEntity.setUserEntity(userEntity);
+		
+		Set<UserNotesEntity> userNotesEntities = new HashSet<UserNotesEntity>(0);
+		userNotesEntities.add(userNotesEntity);
+		userEntity.setUserNotesEntities(userNotesEntities);
+		
 		userDAO.updateUser(userEntity);
 		userDTO = CopyBeanProperties.copyUserPerperties(userEntity);
 		return userDTO;
@@ -834,15 +997,49 @@ public class UserServiceImpl implements UserService{
 
 	@Override
 	@Transactional
-	public UserDTO resetUserPwd(String userId) {
+	public UserDTO resetUserPwd(UserReq userReq) {
 		UserDTO userDTO = null;
-
-		UserEntity userEntity = userDAO.getUser(userId);
+		UserActivityEntity userActivityEntity = null;
+		UserEntity userEntity = userDAO.getUser(userReq.getEditUserId());
 		String pwd =generatePassword();
-		System.out.println(pwd);
-		userEntity.setPassowrd(generatePassword());
+		System.out.println("Password:: "+pwd);
+		UserNotesEntity userNotesEntity = new UserNotesEntity();
+		userNotesEntity.setNotes(userReq.getNotes());
+		userNotesEntity.setCreatedBy(userReq.getNotesuserId());
+		userNotesEntity.setCreatedTs(new Date());
+		userNotesEntity.setUserEntity(userEntity);
+		
+		Set<UserNotesEntity> userNotesEntities = new HashSet<UserNotesEntity>(0);
+		userNotesEntities.add(userNotesEntity);
+		userEntity.setUserNotesEntities(userNotesEntities);
+		
+		userActivityEntity = new UserActivityEntity();
+		userActivityEntity.setUserEntity(userEntity);
+		userActivityEntity.setActivityType(APPConstants.PASSWORD_RESET_ACTIVITY);
+		userActivityEntity.setActivityCreateTs(new Date());
+		userActivityEntity.setActivityCreatedBy(userEntity.getUserId());
+		Set<UserActivityEntity> userActivityEntities = new HashSet<UserActivityEntity>(0);
+		userActivityEntities.add(userActivityEntity);
+		userEntity.setUserActivityEntities(userActivityEntities);
+		
+		Set<PwdHistoryEntity> pwdHistoryEntities = new HashSet<PwdHistoryEntity>(0);
+		
+		PwdHistoryEntity pwdHistoryEntity =  new PwdHistoryEntity();
+		pwdHistoryEntity.setCreatedTs(new Date());
+		pwdHistoryEntity.setPassword(userEntity.getPassowrd());
+		pwdHistoryEntity.setUserEntity(userEntity);
+		pwdHistoryEntity.setCreatedBy(userEntity.getUserId());
+		pwdHistoryEntities = userEntity.getPwdHistoryEntities();
+		pwdHistoryEntities.add(pwdHistoryEntity);
+		userEntity.setPwdHistoryEntities(pwdHistoryEntities);
+		userEntity.setPassowrd(pwd);
 		userEntity.setPwdChangeFlag(true);
+		
+		userEntity.setUserNotesEntities(userNotesEntities);
+		
 		userDAO.updateUser(userEntity);
+		
+		//userDAO.saveUserActivity(userActivityEntity);
 		userDTO = CopyBeanProperties.copyUserPerperties(userEntity);
 		return userDTO;
 	}
@@ -851,14 +1048,68 @@ public class UserServiceImpl implements UserService{
 	{
 		 char[] potential = new char[10]; // 32768 is not huge....
 		    int size = 0;
-		    final Pattern pattern = Pattern.compile("^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$");
-		    for (int c = 0; c <= 10; c++) {
+		    //final Pattern pattern = Pattern.compile("^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$");  
+		    final Pattern pattern = Pattern.compile(getPasswordPolicy().getPwdRegExp());
+		    
+		   /* for (int c = 0; c <= 10; c++) {
 		        if (pattern.matcher(String.valueOf((char)c)).matches()) {
 		            potential[size++] = (char)c;
 		        }
-		    }
-		    return Arrays.copyOf(potential, size).toString();
+		    }*/
 		    
+			StringBuffer sb = new StringBuffer();
+			
+			String upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+			
+			String lower = "abcdefghijklmnopqrstuvwxyz";
+			
+			String numbers = "0123456789";
+			
+			String splChars = "@#$%^&+=.-_*!";
+			
+			Integer maxLen =Integer.parseInt((String) policyMap.get("Password Minimum Length (x) Characters"));
+			
+			int number = 0;
+			Random rd = new Random();
+			for(int index = 0; index < maxLen ; index++) {
+				
+				 number = getRandomNumberInRange(1,4);
+					
+					if(policyMap.get("Allow Upper Case Letters").toString().equalsIgnoreCase("YES") && number == 1)
+					{
+						sb.append(upper.charAt(rd.nextInt(upper.length())));
+					}
+					
+					if(policyMap.get("Allow Lower Case Letters").toString().equalsIgnoreCase("YES") && number == 2)
+					{
+						sb.append(lower.charAt(rd.nextInt(lower.length())));
+					}
+					if(policyMap.get("Allow Special Characters (@#$%^&+=.-_*!)").toString().equalsIgnoreCase("YES") && number == 3)
+					{
+						sb.append(splChars.charAt(rd.nextInt(splChars.length())));
+					}
+					if(policyMap.get("Allow Numeric Characters").toString().equalsIgnoreCase("YES") && number == 4)
+					{
+						sb.append(numbers.charAt(rd.nextInt(numbers.length())));
+					}
+			
+			}
+		    
+		    System.out.println(sb.toString());
+		   
+		    
+		    return sb.toString();
+		    
+	}
+	
+	private static int getRandomNumberInRange(int min, int max) {
+
+		if (min >= max) {
+			throw new IllegalArgumentException("max must be greater than min");
+		}
+
+		Random r = new Random();
+		return r.nextInt((max - min) + 1) + min;
 	}
 
 	@Override
@@ -892,7 +1143,7 @@ public class UserServiceImpl implements UserService{
 	@Transactional
 	public UserSVCResp getPasswordPolicy() {
 		 UserSVCResp userSVCResp = new UserSVCResp();
-		getPolicies();
+		 getInternalPolicies();
 		StringBuffer passwordRegExpr = new StringBuffer();
 		StringBuffer passwordString = new StringBuffer();
 		//^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=.\-_*!()])([a-zA-Z0-9@#$%^&+=*.\-_!()]){3,}$
@@ -902,36 +1153,98 @@ public class UserServiceImpl implements UserService{
 		if(policyMap.get("Allow Special Characters (@#$%^&+=.-_*!)").toString().equalsIgnoreCase("YES"))
 		{
 			passwordRegExpr =  passwordRegExpr.append("@#$%^&+=.\\-_*!");
-			passwordString.append("at least one special character, ");
+			passwordString.append("At least one special character");
 		}
 		
 		if(policyMap.get("Allow Upper Case Letters").toString().equalsIgnoreCase("YES"))
 		{
 			passwordRegExpr =  passwordRegExpr.append("A-Z");
-			passwordString.append(" at least one upper case letter, ");
+			if(passwordString.length() > 0)
+				passwordString.append(", ");
+			passwordString.append(" At least one upper case letter");
 		}
 		
 		if(policyMap.get("Allow Lower Case Letters").toString().equalsIgnoreCase("YES"))
 		{
 			passwordRegExpr =  passwordRegExpr.append("a-z");
-			passwordString.append("at least one lower case letter, ");
+			if(passwordString.length() > 0)
+				passwordString.append(", ");
+			passwordString.append("At least one lower case letter");
 		}
 		
 		if(policyMap.get("Allow Numeric Characters").toString().equalsIgnoreCase("YES"))
 		{
 			passwordRegExpr = passwordRegExpr.append("0-9");
-			passwordString.append("at least one number");
+			if(passwordString.length() > 0)
+				passwordString.append(", ");
+			passwordString.append("at least one number ");
 		}
 		
 		//([a-zA-Z0-9@#$%^&+=*.\-_])
+	
 		passwordRegExpr = passwordRegExpr.append("])");
 		//passwordRegExpr = passwordRegExpr.append("([a-zA-Z0-9])");
 		passwordRegExpr = passwordRegExpr.append("{");
-		passwordString.append(". Must contain minimum "+policyMap.get("Password Minimum Length (x) Characters")+" characters and maximum "+policyMap.get("Password Maximum Length (x) Characters")+" characters.");
+		if(passwordString.length() > 0)
+			passwordString.append(", ");
+		passwordString.append(" Must contain minimum "+policyMap.get("Password Minimum Length (x) Characters")+" characters, maximum "+policyMap.get("Password Maximum Length (x) Characters")+" characters.");
 		passwordRegExpr = passwordRegExpr.append(policyMap.get("Password Minimum Length (x) Characters")+",");
 		passwordRegExpr = passwordRegExpr.append(policyMap.get("Password Maximum Length (x) Characters")+"}$");
 		userSVCResp.setPwdRegExp(passwordRegExpr.toString());
 		userSVCResp.setPwdString(passwordString.toString());
+		
+		
+		 //getExternalPolicies();
+			 passwordRegExpr = new StringBuffer();
+			 passwordString = new StringBuffer();
+			//^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=.\-_*!()])([a-zA-Z0-9@#$%^&+=*.\-_!()]){3,}$
+			passwordRegExpr = passwordRegExpr.append("^([");
+			passwordString.append("Password must contain ");
+			if(externalPolicyMap.get("Allow Special Characters (@#$%^&+=-_*!)").toString().equalsIgnoreCase("YES"))
+			{
+				passwordRegExpr =  passwordRegExpr.append("@#$%^&+=.\\-_*!");
+				passwordString.append("At least one special character");
+			}
+			
+			if(externalPolicyMap.get("Allow Upper Case Letters").toString().equalsIgnoreCase("YES"))
+			{
+				passwordRegExpr =  passwordRegExpr.append("A-Z");
+				if(passwordString.length() > 0)
+					passwordString.append(", ");
+				passwordString.append(" At least one upper case letter");
+			}
+			
+			if(externalPolicyMap.get("Allow Lower Case Letters").toString().equalsIgnoreCase("YES"))
+			{
+				passwordRegExpr =  passwordRegExpr.append("a-z");
+				if(passwordString.length() > 0)
+					passwordString.append(", ");
+				passwordString.append("At least one lower case letter");
+			}
+			
+			if(externalPolicyMap.get("Allow Numeric Characters").toString().equalsIgnoreCase("YES"))
+			{
+				passwordRegExpr = passwordRegExpr.append("0-9");
+				if(passwordString.length() > 0)
+					passwordString.append(", ");
+				passwordString.append("at least one number ");
+			}
+			
+			//([a-zA-Z0-9@#$%^&+=*.\-_])
+		
+			passwordRegExpr = passwordRegExpr.append("])");
+			//passwordRegExpr = passwordRegExpr.append("([a-zA-Z0-9])");
+			passwordRegExpr = passwordRegExpr.append("{");
+			if(passwordString.length() > 0)
+				passwordString.append(", ");
+			passwordString.append(" Must contain minimum "+externalPolicyMap.get("Password Minimum Length (x) Characters")+" characters, maximum "+externalPolicyMap.get("Password Maximum Length (x) Characters")+" characters.");
+			passwordRegExpr = passwordRegExpr.append(externalPolicyMap.get("Password Minimum Length (x) Characters")+",");
+			passwordRegExpr = passwordRegExpr.append(externalPolicyMap.get("Password Maximum Length (x) Characters")+"}$");
+			userSVCResp.setExternalPwdRegExp(passwordRegExpr.toString());
+			userSVCResp.setExternalPwdString(passwordString.toString());
+			
+		
+		userSVCResp.setUserInactivateTime( Integer.parseInt(policyMap.get("User Session Inactivity (x) Minutes").toString()));
 		return userSVCResp;
 	}
 
@@ -973,8 +1286,18 @@ public class UserServiceImpl implements UserService{
 		tempUserEntity.setReportingTo(onboardingReq.getReportingTo());
 		tempUserEntity.setPendingApproval(true);
 		tempUserEntity.setAccountType(onboardingReq.getAccountType());
+		tempUserEntity.setAccountSubType(onboardingReq.getAccountSubType());
 		tempUserEntity.setCreatedTs(new Date());
+		tempUserEntity.setSendingTo(onboardingReq.getSendingTo());
+		tempUserEntity.setReceivingFrom(onboardingReq.getReceivingFrom());
+		tempUserEntity.setBusinessJustification(onboardingReq.getBusinessJustification());
+		tempUserEntity.setTypeOfDataExchange(onboardingReq.getTypeOfDataExchange());
 		tempUserEntity.setEndDate(onboardingReq.getEndDate());
+		tempUserEntity.setContractCompanyName(onboardingReq.getContractCompanyName());
+		if(onboardingReq.getPhiData() != null)
+			tempUserEntity.setPhiData(true);
+		else
+			tempUserEntity.setPhiData(false);
 		if(onboardingReq.getCompanyName() != 0)
 			tempUserEntity.setContractCompanyEntity(commonDAO.getContractCompanyEntity(onboardingReq.getCompanyName()));
 		
@@ -1143,6 +1466,31 @@ public class UserServiceImpl implements UserService{
 		return returnVal;
 	}
 	
+	
+	/**
+	 * 
+	 * @param userEntity
+	 * @param authToken
+	 * @return
+	 */
+	private boolean sendApproveEmail(UserEntity approver, UserEntity requestor)
+	{
+		String toEmail = null;
+		boolean returnVal = true;
+		if(approver.getEmailId() != null)
+			toEmail = approver.getEmailId();
+		else
+			toEmail = approver.getUserId();
+		String emailBody = APPConstants.ROLE_CHANGE_REQ_MAIL_TEXT;
+		emailBody = emailBody.replace("apprFname", approver.getFirstName());
+		emailBody = emailBody.replace("apprLastName", approver.getLastName());
+		emailBody = emailBody.replace("reqFirstName", requestor.getFirstName());
+		emailBody = emailBody.replace("reqLastName", requestor.getLastName());
+		System.out.println(emailBody);
+		SendEmail.sendHTMLEmail(toEmail, APPConstants.ROLE_CHANGE_REQ_EMAIL_SUB, emailBody);
+		return returnVal;
+	}
+	
 	/**
 	 * 
 	 * @param userEntity
@@ -1172,7 +1520,9 @@ public class UserServiceImpl implements UserService{
 	public Set<OnboardApprovalPendingDTO> getPendingReq(int userId) {
 		 Set<OnboardApprovalPendingDTO> approvalPendingDTOs = new HashSet<OnboardApprovalPendingDTO>(0);
 		 OnboardApprovalPendingDTO onboardApprovalPendingDTO = null;
+		 OnboardApprovedDTO onboardApprovedDTO = null;
 		 boolean supervisor = false;
+		 boolean requestor = false;
 		 List<OnboardApprovalPendingEntity> onboardApprovalPendingEntities = null;
 		 
 		 SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
@@ -1186,24 +1536,35 @@ public class UserServiceImpl implements UserService{
 		 Iterator<UserRoleEntity> roleEntityIter = roleEntities.iterator();
 		 
 		 UserRoleEntity userRoleEntity;
-		 
 		 while(roleEntityIter.hasNext())
 		 {
 			 userRoleEntity = roleEntityIter.next();
-			 if(userRoleEntity.getRolesEntity().getRoleName().contains("Manager"))
+			 if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("ADMIN"))
 			 {
 				 supervisor = true;
+				 break;
+			 }
+			 else  if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Requestor"))
+			 {
+				 requestor = true;
 				 break;
 			 }
 		 }
 		 
 		 if(!supervisor) 
-			 onboardApprovalPendingEntities = userDAO.fetchUserPendingRequest(userId);
+		 {
+				 onboardApprovalPendingEntities = userDAO.fetchUserPendingRequest(userId);
+		 }
+			
 		 else
 			 onboardApprovalPendingEntities = userDAO.fetchUserPendingRequest(null);
+		 
 		
+		if(!requestor)
+		{
 		for(OnboardApprovalPendingEntity approvalPendingEntity : onboardApprovalPendingEntities)
 		{
+			System.out.println(approvalPendingEntity.isPendingApproval()+""+approvalPendingEntity.getOnboardPendingId());
 			if(approvalPendingEntity.isPendingApproval()) {
 				onboardApprovalPendingDTO = new OnboardApprovalPendingDTO();
 				onboardApprovalPendingDTO.setOnboardPendingId(approvalPendingEntity.getOnboardPendingId());
@@ -1214,15 +1575,199 @@ public class UserServiceImpl implements UserService{
 				sdf.format(estDate.getTime());*/
 				onboardApprovalPendingDTO.setRequestDate(getLocalTime(approvalPendingEntity.getRequestDate()));
 				onboardApprovalPendingDTO.setUserId(approvalPendingEntity.getUserEntity().getId());
-				onboardApprovalPendingDTO.setTempUserId(approvalPendingEntity.getTempUserEntity().getEmployeeId());
-				onboardApprovalPendingDTO.setTempFname(approvalPendingEntity.getTempUserEntity().getFirstName());
-				onboardApprovalPendingDTO.setTempLname(approvalPendingEntity.getTempUserEntity().getLastName());
-				onboardApprovalPendingDTO.setPendingWith(approvalPendingEntity.getUserEntity().getFirstName()+" "+approvalPendingEntity.getUserEntity().getLastName());
-				approvalPendingDTOs.add(onboardApprovalPendingDTO);
+				if(approvalPendingEntity.getTempUserEntity() != null )
+				{
+					onboardApprovalPendingDTO.setTempUserId(approvalPendingEntity.getTempUserEntity().getEmployeeId());
+					onboardApprovalPendingDTO.setTempFname(approvalPendingEntity.getTempUserEntity().getFirstName());
+					onboardApprovalPendingDTO.setTempLname(approvalPendingEntity.getTempUserEntity().getLastName());
+					onboardApprovalPendingDTO.setPendingWith(approvalPendingEntity.getUserEntity().getFirstName()+" "+approvalPendingEntity.getUserEntity().getLastName());
+					if(approvalPendingEntity.getTempUserEntity().getCreatedBy() != null)
+					{
+					UserEntity createdBy = userDAO.getUser(approvalPendingEntity.getTempUserEntity().getCreatedBy());
+					onboardApprovalPendingDTO.setSubmittedBy(createdBy.getFirstName()+" "+createdBy.getLastName());
+					}
+					approvalPendingDTOs.add(onboardApprovalPendingDTO);
+				}
+				/*else
+					if(approvalPendingEntity.getRequestUserEntity()!=null)
+					{
+						onboardApprovalPendingDTO.setTempUserId(approvalPendingEntity.getRequestUserEntity().getId().toString());
+						onboardApprovalPendingDTO.setTempFname(approvalPendingEntity.getRequestUserEntity().getFirstName());
+						onboardApprovalPendingDTO.setTempLname(approvalPendingEntity.getRequestUserEntity().getLastName());
+						onboardApprovalPendingDTO.setPendingWith(approvalPendingEntity.getUserEntity().getFirstName()+" "+approvalPendingEntity.getUserEntity().getLastName());
+						approvalPendingDTOs.add(onboardApprovalPendingDTO);
+					}*/
+				
+			}
+			
+		}
+		}
+		else
+		{
+			UserEntity userEntity2 = userDAO.getUser(userId);
+			List<TempUserEntity> tempUserEntities = userDAO.getTempUsersCreatedBy(userEntity2.getUserId());
+			
+			for(TempUserEntity tempUserEntity : tempUserEntities)
+			{
+				onboardApprovalPendingDTO = new OnboardApprovalPendingDTO();
+				
+				for(OnboardApprovalPendingEntity approvalPendingEntity : onboardApprovalPendingEntities)
+				{
+					System.out.println(approvalPendingEntity.isPendingApproval()+""+approvalPendingEntity.getOnboardPendingId());
+					if(approvalPendingEntity.isPendingApproval()) {
+						onboardApprovalPendingDTO = new OnboardApprovalPendingDTO();
+						onboardApprovalPendingDTO.setOnboardPendingId(approvalPendingEntity.getOnboardPendingId());
+						onboardApprovalPendingDTO.setReqType(approvalPendingEntity.getRequestType());
+						/*estDate.setTime(approvalPendingEntity.getRequestDate());
+						sdf.setTimeZone(TimeZone.getTimeZone("America/New_York"));
+						System.out.println(estDate.getTime());
+						sdf.format(estDate.getTime());*/
+						onboardApprovalPendingDTO.setRequestDate(getLocalTime(approvalPendingEntity.getRequestDate()));
+						onboardApprovalPendingDTO.setUserId(approvalPendingEntity.getUserEntity().getId());
+						if(approvalPendingEntity.getTempUserEntity() != null )
+						{
+							onboardApprovalPendingDTO.setTempUserId(approvalPendingEntity.getTempUserEntity().getEmployeeId());
+							onboardApprovalPendingDTO.setTempFname(approvalPendingEntity.getTempUserEntity().getFirstName());
+							onboardApprovalPendingDTO.setTempLname(approvalPendingEntity.getTempUserEntity().getLastName());
+							onboardApprovalPendingDTO.setPendingWith(approvalPendingEntity.getUserEntity().getFirstName()+" "+approvalPendingEntity.getUserEntity().getLastName());
+							if(approvalPendingEntity.getTempUserEntity().getCreatedBy() != null)
+							{
+							UserEntity createdBy = userDAO.getUser(approvalPendingEntity.getTempUserEntity().getCreatedBy());
+							onboardApprovalPendingDTO.setSubmittedBy(createdBy.getFirstName()+" "+createdBy.getLastName());
+							}
+							approvalPendingDTOs.add(onboardApprovalPendingDTO);
+						}
+					}
+				}
 			}
 		}
 			
 		return approvalPendingDTOs;
+	}
+	
+	
+	@Override
+	@Transactional
+	public Set<OnboardApprovalPendingDTO> getCreatedBy(int userId) {
+		 Set<OnboardApprovalPendingDTO> approvalPendingDTOs = new HashSet<OnboardApprovalPendingDTO>(0);
+		 OnboardApprovalPendingDTO onboardApprovalPendingDTO = null;
+		 OnboardApprovedDTO onboardApprovedDTO = null;
+		 boolean supervisor = false;
+		 boolean requestor = false;
+		 List<OnboardApprovalPendingEntity> onboardApprovalPendingEntities = null;
+		 
+		 SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
+		 
+		 	Calendar estDate = Calendar.getInstance();
+			
+		 UserEntity userEntity = userDAO.getUser(userId);
+		 
+		 Set<UserRoleEntity> roleEntities = userEntity.getUserRoleEntities();
+		 
+ 		onboardApprovalPendingEntities = userDAO.fetchUserRequestedBy(userDAO.getUser(userId).getUserId());
+		
+		for(OnboardApprovalPendingEntity approvalPendingEntity : onboardApprovalPendingEntities)
+		{
+			System.out.println(approvalPendingEntity.isPendingApproval()+""+approvalPendingEntity.getOnboardPendingId());
+			if(approvalPendingEntity.isPendingApproval()) {
+				onboardApprovalPendingDTO = new OnboardApprovalPendingDTO();
+				onboardApprovalPendingDTO.setOnboardPendingId(approvalPendingEntity.getOnboardPendingId());
+				onboardApprovalPendingDTO.setReqType(approvalPendingEntity.getRequestType());
+				/*estDate.setTime(approvalPendingEntity.getRequestDate());
+				sdf.setTimeZone(TimeZone.getTimeZone("America/New_York"));
+				System.out.println(estDate.getTime());
+				sdf.format(estDate.getTime());*/
+				onboardApprovalPendingDTO.setRequestDate(getLocalTime(approvalPendingEntity.getRequestDate()));
+				onboardApprovalPendingDTO.setUserId(approvalPendingEntity.getUserEntity().getId());
+				if(approvalPendingEntity.getTempUserEntity() != null )
+				{
+					onboardApprovalPendingDTO.setTempUserId(approvalPendingEntity.getTempUserEntity().getEmployeeId());
+					onboardApprovalPendingDTO.setTempFname(approvalPendingEntity.getTempUserEntity().getFirstName());
+					onboardApprovalPendingDTO.setTempLname(approvalPendingEntity.getTempUserEntity().getLastName());
+					onboardApprovalPendingDTO.setPendingWith(approvalPendingEntity.getUserEntity().getFirstName()+" "+approvalPendingEntity.getUserEntity().getLastName());
+					if(approvalPendingEntity.getTempUserEntity().getCreatedBy() != null)
+					{
+					UserEntity createdBy = userDAO.getUser(approvalPendingEntity.getTempUserEntity().getCreatedBy());
+					onboardApprovalPendingDTO.setSubmittedBy(createdBy.getFirstName()+" "+createdBy.getLastName());
+					}
+				}
+				else
+					if(approvalPendingEntity.getRequestUserEntity()!=null)
+					{
+						onboardApprovalPendingDTO.setTempUserId(approvalPendingEntity.getRequestUserEntity().getId().toString());
+						onboardApprovalPendingDTO.setTempFname(approvalPendingEntity.getRequestUserEntity().getFirstName());
+						onboardApprovalPendingDTO.setTempLname(approvalPendingEntity.getRequestUserEntity().getLastName());
+						onboardApprovalPendingDTO.setPendingWith(approvalPendingEntity.getUserEntity().getFirstName()+" "+approvalPendingEntity.getUserEntity().getLastName());
+					}
+				approvalPendingDTOs.add(onboardApprovalPendingDTO);
+			}
+			
+		}
+			
+		return approvalPendingDTOs;
+	}
+	
+	
+	@Override
+	@Transactional
+	public List<OnboardApprovedDTO> getApprovedRequests(int userId) {
+		List<OnboardApprovalAuditEntity> onboardApprovalAuditEntities = null;
+		UserEntity userEntity = userDAO.getUser(userId);
+		Set<UserRoleEntity> roleEntities = userEntity.getUserRoleEntities();
+		 
+		 Iterator<UserRoleEntity> roleEntityIter = roleEntities.iterator();
+		 
+		 UserRoleEntity userRoleEntity;
+		 boolean supervisor = false;
+		 while(roleEntityIter.hasNext())
+		 {
+			 userRoleEntity = roleEntityIter.next();
+			 System.out.println("userRoleEntity.getRolesEntity() "+userRoleEntity.getRolesEntity().getRoleName());
+			 if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("ADMIN"))
+			 {
+				 supervisor = true;
+				 break;
+			 }
+		 }
+		 
+		 if(!supervisor) 
+			 onboardApprovalAuditEntities = userDAO.getApprovedRequests(userEntity.getUserId());
+		 else
+			 onboardApprovalAuditEntities = userDAO.getApprovedRequests(null);
+		 
+		OnboardApprovedDTO onboardApprovedDTO = null;
+		List<OnboardApprovedDTO> onboardApprovedDTOs = new ArrayList<OnboardApprovedDTO>();
+		TempUserEntity tempUserEntity = null;
+		UserEntity approvedBy = null;
+		 
+		if(!onboardApprovalAuditEntities.isEmpty())
+		{
+			for(OnboardApprovalAuditEntity onboardApprovalAuditEntity : onboardApprovalAuditEntities)
+			{
+				tempUserEntity = userDAO.getApprovedTempUser(onboardApprovalAuditEntity.getTempUserTbEmployeeId());
+				if(tempUserEntity != null)
+				{
+					onboardApprovedDTO = new OnboardApprovedDTO();
+					onboardApprovedDTO.setTempUserId(tempUserEntity.getEmployeeId());
+					onboardApprovedDTO.setTempFname(tempUserEntity.getFirstName());
+					onboardApprovedDTO.setTempLname(tempUserEntity.getLastName());
+					onboardApprovedDTO.setReqType("Onboarding");
+					if(onboardApprovalAuditEntity.getAprovedOn() != null)
+						onboardApprovedDTO.setApprovedOn(getLocalTime(onboardApprovalAuditEntity.getAprovedOn()));
+					approvedBy = userDAO.getUser(onboardApprovalAuditEntity.getUserTbId());
+					onboardApprovedDTO.setApprovedBy(approvedBy.getFirstName()+" "+approvedBy.getLastName());
+					if(tempUserEntity.getCreatedBy() != null)
+					{
+					UserEntity createdBy = userDAO.getUser(tempUserEntity.getCreatedBy());
+					if(createdBy != null)
+					onboardApprovedDTO.setSubmittedBy(createdBy.getFirstName()+" "+createdBy.getLastName());
+				}
+				onboardApprovedDTOs.add(onboardApprovedDTO);
+				}
+			}
+			
+		}
+		return onboardApprovedDTOs;
 	}
 
 	@Override
@@ -1243,8 +1788,27 @@ public class UserServiceImpl implements UserService{
 		String department = rolesEntity.getSystemEntity().getDeptEntity().getDeptName();*/
 		tempUserDTO.setCreatedTs(getLocalTime(tempUserEntity.getCreatedTs()));
 		tempUserDTO.setAccountType(tempUserEntity.getAccountType());
+		tempUserDTO.setAccountSubType(tempUserEntity.getAccountSubType());
+		tempUserDTO.setBusinessJustification(tempUserEntity.getBusinessJustification());
+		tempUserDTO.setSendingTo(tempUserEntity.getSendingTo());
+		tempUserDTO.setReceivingFrom(tempUserEntity.getReceivingFrom());
+		tempUserDTO.setTypeOfDataExchange(tempUserEntity.getTypeOfDataExchange());
+		tempUserDTO.setPhiData(tempUserEntity.isPhiData());
+		UserEntity createdBy = userDAO.getUser(tempUserEntity.getCreatedBy());
+		
+		
+		System.out.println("Created By::"+tempUserDTO.getCreatedBy());
+		Set<OnboardApprovalPendingEntity> onboardApprovalPendingEntities = tempUserEntity.getOnboardApprovalPendingEntities();
+		int level = 0;
+		for(OnboardApprovalPendingEntity onboardApprovalPendingEntity : onboardApprovalPendingEntities)
+		{
+			if(level < onboardApprovalPendingEntity.getLevel())
+				level = onboardApprovalPendingEntity.getLevel();
+		}
+		tempUserDTO.setApproveLevel(level);
 		try {
 			BeanUtils.copyProperties(tempUserDTO, tempUserEntity);
+			tempUserDTO.setCreatedBy(createdBy.getFirstName()+" "+createdBy.getLastName());
 			if(!tempUserEntity.getOnboardingUserNotesEntities().isEmpty())
 			{
 				Set<OnboardingUserNotesEntity> onboardingUserNotesEntities =  tempUserEntity.getOnboardingUserNotesEntities();
@@ -1286,7 +1850,7 @@ public class UserServiceImpl implements UserService{
 					roleDTO.setRoleId(tempUserRoleEntity.getRolesEntity().getRoleId());
 					roleDTO.setRoleName(tempUserRoleEntity.getRolesEntity().getRoleName());
 					roleDTO.setSystemName(tempUserRoleEntity.getRolesEntity().getSystemEntity().getSystemName());
-					roleDTO.setDepartmentName(tempUserRoleEntity.getRolesEntity().getSystemEntity().getDeptEntity().getDeptName());
+					//roleDTO.setDepartmentName(tempUserRoleEntity.getRolesEntity().getSystemEntity().getDeptEntity().getDeptName());
 					roleDTOs.add(roleDTO);
 				}
 				tempUserDTO.setRoleDTOs(roleDTOs);
@@ -1309,6 +1873,8 @@ public class UserServiceImpl implements UserService{
 		// TODO Auto-generated method stub
 		
 		UserSVCResp userSVCResp = new UserSVCResp();
+		if(tempUserDTO.getReqType().equalsIgnoreCase("On boarding"))
+		{
 		TempUserEntity tempUserEntity = userDAO.getTempUser(tempUserDTO.getEmployeeId());
 		
 		OnboardApprovalAuditEntity onboardApprovalAuditEntity = new OnboardApprovalAuditEntity();
@@ -1316,7 +1882,7 @@ public class UserServiceImpl implements UserService{
 		if(tempUserDTO.getOperation().equalsIgnoreCase("REJECT"))
 		{
 			UserEntity userEntity = userDAO.getUser(tempUserDTO.getApprovedBy());
-			OnboardApprovalPendingEntity onboardApprovalPendingEntity = userDAO.getOnboardApprovalPendingEntity(tempUserEntity.getEmployeeId(),userEntity.getId());
+			OnboardApprovalPendingEntity onboardApprovalPendingEntity = userDAO.getOnboardApprovalPendingEntity(tempUserEntity.getEmployeeId(),0,userEntity.getId());
 			onboardApprovalAuditEntity.setUserTbId(tempUserDTO.getApprovedBy());
 			onboardApprovalAuditEntity.setTempUserTbEmployeeId(tempUserEntity.getEmployeeId());
 			onboardApprovalAuditEntity.setMessage("Request  has rejected.");
@@ -1357,7 +1923,7 @@ public class UserServiceImpl implements UserService{
 		else {
 			
 				UserEntity userEntity = userDAO.getUser(tempUserDTO.getApprovedBy());
-				OnboardApprovalPendingEntity onboardApprovalPendingEntity = userDAO.getOnboardApprovalPendingEntity(tempUserDTO.getEmployeeId(),userEntity.getId());
+				OnboardApprovalPendingEntity onboardApprovalPendingEntity = userDAO.getOnboardApprovalPendingEntity(tempUserDTO.getEmployeeId(),0,userEntity.getId());
 				onboardApprovalAuditEntity.setUserTbId(onboardApprovalPendingEntity.getUserEntity().getUserId());
 				onboardApprovalAuditEntity.setTempUserTbEmployeeId(tempUserEntity.getEmployeeId());
 				onboardApprovalAuditEntity.setMessage(onboardApprovalPendingEntity.getUserEntity().getLastName()+" has approved.");
@@ -1412,6 +1978,7 @@ public class UserServiceImpl implements UserService{
 				System.out.println(onboardApprovalPendingEntities.isEmpty());
 				if(onboardApprovalPendingEntities.isEmpty())
 				{
+					tempUserEntity.setPendingApproval(false);
 					SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy");
 					userEntity = new UserEntity();
 					UserWorkEntity userWorkEntity = new UserWorkEntity();
@@ -1475,8 +2042,141 @@ public class UserServiceImpl implements UserService{
 					
 				
 				}
+		} 
+		}else if(tempUserDTO.getReqType().equalsIgnoreCase("Add Role"))
+		{
+			OnboardApprovalAuditEntity onboardApprovalAuditEntity = new OnboardApprovalAuditEntity();
+			if(tempUserDTO.getOperation().equalsIgnoreCase("REJECT"))
+			{
+				UserEntity userEntity = userDAO.getUser(tempUserDTO.getApprovedBy());
+				OnboardApprovalPendingEntity onboardApprovalPendingEntity = userDAO.getOnboardApprovalPendingEntity(null,new Integer(tempUserDTO.getEmployeeId()),userEntity.getId());
+				
+				UserEntity reqUserEntity = userDAO.getUser(tempUserDTO.getEmployeeId());
+				
+				System.out.println("onboardApprovalPendingEntity "+onboardApprovalPendingEntity.isPendingApproval());
+				//onboardApprovalPendingEntity.setUserEntity(userEntity);
+				userDAO.updateOnboardApprovalPendingEntity(onboardApprovalPendingEntity);
+				
+				/*OnboardingUserNotesEntity onboardingUserNotesEntity = new OnboardingUserNotesEntity();
+				onboardingUserNotesEntity.setTempUserEntity(reqUserEntity);
+				onboardingUserNotesEntity.setNotes(tempUserDTO.getNotes());
+				onboardingUserNotesEntity.setCreatedBy(tempUserDTO.getApprovedBy());
+				onboardingUserNotesEntity.setCreatedTs(new Date());
+				commonDAO.saveOnboardingNotes(onboardingUserNotesEntity);*/
+				
+				onboardApprovalPendingEntity.setPendingApproval(false);
+				userDAO.updateOnboardApprovalPendingEntity(onboardApprovalPendingEntity);
+				
+				
+				/*userEntity = userDAO.getUser(tempUserEntity.getCreatedBy());
+				int roleId = onboardApprovalPendingEntity.getRoleID();
+				onboardApprovalPendingEntity = new OnboardApprovalPendingEntity();
+				onboardApprovalPendingEntity.setRequestDate(new Date());
+				onboardApprovalPendingEntity.setTempUserEntity(tempUserEntity);
+				onboardApprovalPendingEntity.setPendingApproval(true);
+				onboardApprovalPendingEntity.setRequestType("Onboarding Approval");
+				onboardApprovalPendingEntity.setUserEntity(userEntity);
+				onboardApprovalPendingEntity.setRoleID(roleId);
+				onboardApprovalPendingEntity.setLevel(0);
+				commonDAO.saveOnboardApprovalPendingEntity(onboardApprovalPendingEntity);
+				sendRejectEmail(userEntity, tempUserEntity);
+				
+				userDAO.updateTempUser(tempUserEntity);*/
+				
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ONBOARD.REJECT.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.ONBOARD.REJECT.STRING",null, Locale.getDefault()));
 				
 			}
+			else {
+
+				UserNotesEntity userNotesEntity = new UserNotesEntity();
+				UserEntity userEntity = userDAO.getUser(tempUserDTO.getApprovedBy());
+				
+				UserEntity requestUserEntity = userDAO.getUser(new Integer(tempUserDTO.getEmployeeId()));
+				OnboardApprovalPendingEntity onboardApprovalPendingEntity = userDAO.getOnboardApprovalPendingEntity(null,new Integer(tempUserDTO.getEmployeeId()),userEntity.getId());
+				/*onboardApprovalAuditEntity.setUserTbId(onboardApprovalPendingEntity.getUserEntity().getUserId());
+				onboardApprovalAuditEntity.setTempUserTbEmployeeId(tempUserEntity.getEmployeeId());
+				onboardApprovalAuditEntity.setMessage(onboardApprovalPendingEntity.getUserEntity().getLastName()+" has approved.");
+				onboardApprovalAuditEntity.setAprovedOn(new Date());
+				userDAO.saveOnboardingApprovalAudit(onboardApprovalAuditEntity);*/
+				
+				/*OnboardingUserNotesEntity onboardingUserNotesEntity = new OnboardingUserNotesEntity();
+				onboardingUserNotesEntity.setTempUserEntity(tempUserEntity);
+				onboardingUserNotesEntity.setNotes(tempUserDTO.getNotes());
+				onboardingUserNotesEntity.setCreatedBy(tempUserDTO.getApprovedBy());
+				onboardingUserNotesEntity.setCreatedTs(new Date());
+				commonDAO.saveOnboardingNotes(onboardingUserNotesEntity)*/;
+				
+				
+				
+				userNotesEntity.setUserEntity(requestUserEntity);
+				userNotesEntity.setNotes(tempUserDTO.getNotes());
+				userNotesEntity.setCreatedBy(tempUserDTO.getApprovedBy());
+				userNotesEntity.setCreatedTs(new Date());
+				commonDAO.saveuserNotes(userNotesEntity);
+				
+				
+				onboardApprovalPendingEntity.setPendingApproval(false);
+				userDAO.updateOnboardApprovalPendingEntity(onboardApprovalPendingEntity);
+				
+				
+				int approveLevel = onboardApprovalPendingEntity.getLevel();
+				System.out.println("approveLevel "+approveLevel);
+				//List<OnboardingApprovalEntity> onboardingApprovalEntities = commonDAO.getOnboardApproval(onboardApprovalPendingEntity.getRoleID(),approveLevel);
+			
+				
+				int maxLevel = commonDAO.getOnboardApprovalMaxLevel(onboardApprovalPendingEntity.getRoleID());
+				
+				int roleId = onboardApprovalPendingEntity.getRoleID();
+				System.out.println("maxLevel" +maxLevel);
+				if(maxLevel > approveLevel) {
+					OnboardingApprovalEntity onboardingApprovalEntity = commonDAO.getOnboardApproval(onboardApprovalPendingEntity.getRoleID(),approveLevel+1);
+					onboardApprovalPendingEntity = new OnboardApprovalPendingEntity();
+					onboardApprovalPendingEntity.setRequestDate(new Date());
+					onboardApprovalPendingEntity.setRequestUserEntity(requestUserEntity);
+					onboardApprovalPendingEntity.setPendingApproval(true);
+					onboardApprovalPendingEntity.setUserEntity(onboardingApprovalEntity.getUserEntity());
+					onboardApprovalPendingEntity.setRoleID(roleId);
+					onboardApprovalPendingEntity.setRequestType("Add Role Request");
+					onboardApprovalPendingEntity.setLevel(approveLevel+1);
+					sendApproveEmail(onboardingApprovalEntity.getUserEntity(), requestUserEntity);
+					commonDAO.saveOnboardApprovalPendingEntity(onboardApprovalPendingEntity);
+				}
+				/*else
+				{
+					onboardApprovalPendingEntity.setPendingApproval(false);
+				}*/
+				
+				
+				
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ONBOARD.APPROVAL.NEXTLEVEL.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.ONBOARD.APPROVAL.NEXTLEVEL.STRING",null, Locale.getDefault()));
+				
+				
+				List<OnboardApprovalPendingEntity> onboardApprovalPendingEntities = userDAO.getOnboardApprovalPendingEntity(tempUserDTO.getEmployeeId());
+				System.out.println(onboardApprovalPendingEntities.isEmpty());
+				if(onboardApprovalPendingEntities.isEmpty())
+				{
+					Set<UserRoleEntity> userRoleEntities = requestUserEntity.getUserRoleEntities();
+					
+					for(UserRoleEntity userRoleEntity : userRoleEntities)
+					{
+						if(!userRoleEntity.isActiveStatus())
+							userRoleEntity.setActiveStatus(true);
+					}
+					userDAO.updateUser(requestUserEntity);
+					userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ONBOARD.APPROVAL.COMPLETED.CODE",null, Locale.getDefault())));
+					userSVCResp.setresultString(messageSource.getMessage("USER.ONBOARD.APPROVAL.COMPLETED.STRING",null, Locale.getDefault()));
+				}
+				else
+				{
+					
+				
+				}
+			}
+			
+		}
+				
 		return userSVCResp;
 	}
 	
@@ -1551,6 +2251,24 @@ public class UserServiceImpl implements UserService{
 			return false;
 		}
 	}
+	
+	@Override
+	@Transactional
+	public boolean refreshToken(String token, Integer userId) {
+		
+		SecauthtokenEntity secauthtokenEntity = userDAO.getAuthToken(token);
+		UserEntity userEntity = secauthtokenEntity.getUserEntity();
+		if(userEntity.getId().intValue() == userId.intValue())
+		{
+			secauthtokenEntity.setLastAccessTs(new Date());
+			userDAO.updateAuthToken(secauthtokenEntity);
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+	}
 
 	@Override
 	@Transactional
@@ -1583,6 +2301,113 @@ public class UserServiceImpl implements UserService{
 		estDate.setTime(date);
 		sdf.setTimeZone(TimeZone.getTimeZone("America/New_York"));
 		return sdf.format(estDate.getTime());
+	}
+
+	@Override
+	@Transactional
+	public UserProfileResp addRole(AddUserRoleReq addUserRoleReq) {
+		UserEntity userEntity = userDAO.getUser(addUserRoleReq.getId());
+		
+		RolesEntity rolesEntity = commonDAO.getRoleById(addUserRoleReq.getRole());
+		
+		Set<UserRoleEntity> userRoleEntities = userEntity.getUserRoleEntities();
+		
+		UserRoleEntity userRoleEntity = new UserRoleEntity();
+		userRoleEntity.setRolesEntity(rolesEntity);
+		userRoleEntity.setUserEntity(userEntity);
+		userRoleEntity.setStartDate(convertCalDate(addUserRoleReq.getStartDate()));
+		userRoleEntity.setEndDate(convertCalDate(addUserRoleReq.getStartDate()));
+		userRoleEntity.setActiveStatus(false);
+		userRoleEntity.setCreatedBy(addUserRoleReq.getCreatedBy());
+		userRoleEntity.setCreatedTs(new Date());
+		userRoleEntity.setModifiedBy(addUserRoleReq.getCreatedBy());
+		userRoleEntity.setModifiedTs(new Date());
+		userRoleEntities.add(userRoleEntity);
+		userEntity.setUserRoleEntities(userRoleEntities);
+		
+		userDAO.updateUser(userEntity);
+		
+		createRoleChangeApprovalReq(addUserRoleReq.getRole(), userEntity);
+		
+		userEntity =  userDAO.getUser(addUserRoleReq.getId());
+		UserProfileResp userProfileResp = new UserProfileResp();
+		if(userEntity != null)
+		{
+			userProfileResp = CopyBeanProperties.createUserProfile(userEntity);
+		}
+		return userProfileResp;
+	}
+	
+	private void createRoleChangeApprovalReq(int roleID, UserEntity userEntity)
+	{
+		OnboardingApprovalEntity onboardingApprovalEntity = commonDAO.getOnboardApproval(roleID,1);
+		UserEntity approveUserEntity = null;
+		
+		approveUserEntity = onboardingApprovalEntity.getUserEntity();
+		OnboardApprovalPendingEntity onboardApprovalPendingEntity = new OnboardApprovalPendingEntity();
+		onboardApprovalPendingEntity.setUserEntity(approveUserEntity);
+		onboardApprovalPendingEntity.setRequestUserEntity(userEntity);
+		onboardApprovalPendingEntity.setRequestDate(new Date());
+		onboardApprovalPendingEntity.setRequestType("Add Role Request");
+		onboardApprovalPendingEntity.setPendingApproval(true);
+		onboardApprovalPendingEntity.setLevel(1);
+		onboardApprovalPendingEntity.setRoleID(roleID);
+		commonDAO.saveOnboardApprovalPendingEntity(onboardApprovalPendingEntity);
+		sendApproveEmail(approveUserEntity, userEntity); 
+		
+	}
+
+	@Override
+	@Transactional
+	public UserProfileResp getUserProfile(int id) {
+		UserEntity userEntity =  userDAO.getUser(id);
+		UserProfileResp userProfileResp = new UserProfileResp();
+		if(userEntity != null)
+		{
+			userProfileResp = CopyBeanProperties.createUserProfile(userEntity);
+		}
+		return userProfileResp;
+	}
+
+	@Override
+	@Transactional
+	public UserProfileResp deleteRole(Integer userRoleId) {
+		
+		UserRoleEntity userRoleEntity = userDAO.getUserRoleOnUserRoleId(userRoleId);
+		UserProfileResp userProfileResp = null;
+		if(userRoleEntity != null){
+			userRoleEntity.setActiveStatus(false);
+			userRoleEntity.setModifiedBy("TEST");
+			userRoleEntity.setModifiedTs(new Date());
+			
+			UserEntity userEntity =  userRoleEntity.getUserEntity();
+			if(userEntity != null)
+			{
+				userProfileResp = CopyBeanProperties.createUserProfile(userEntity);
+				userProfileResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ROLE.DELETE.CODE",null, Locale.getDefault())));
+				userProfileResp.setresultString(messageSource.getMessage("USER.ROLE.DELETE.STRING",null, Locale.getDefault()));
+			}
+		}
+		
+		return userProfileResp;
+	}
+
+	@Override
+	@Transactional
+	public List<UserDTO> getUsers() {
+		// TODO Auto-generated method stub
+		List<UserDTO> userDTOs = new ArrayList<UserDTO>();
+		UserDTO userDTO = null;
+		List<UserEntity> userEntities = userDAO.getUsers();
+		for(UserEntity userEntity : userEntities)
+		{
+			userDTO = new UserDTO();
+			userDTO.setId(userEntity.getId());
+			userDTO.setFirstName(userEntity.getFirstName());
+			userDTO.setLastName(userEntity.getLastName());
+			userDTOs.add(userDTO);
+		}
+		return userDTOs;
 	}
 
 }
