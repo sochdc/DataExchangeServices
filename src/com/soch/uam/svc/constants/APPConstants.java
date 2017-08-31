@@ -50,10 +50,25 @@ public class APPConstants {
 			"<a href=\"url\" target=\"_blank\">url"+
 			" </a> ";
 	
+	
+	public static String ROLE_CHANGE_REQ_EMAIL_SUB = "Request for Role Change Approval";
+	public static String  ROLE_CHANGE_REQ_MAIL_TEXT ="Dear apprFname apprLastName <br><h4 style=\"color:RED\">The following user request is pending for approval.</h4> " +
+			"<h4>reqFirstName reqLastName</h4> <br><br>";
+	
 	public static String SOURCE_INTERNAL ="INTERNAL";
 	public static String SOURCE_EXTERNAL ="EXTERNAL";
 	
 	public static String SR_AR_SPECIALIST = "Accounts Payable Specialist Sr";
 	
 	public static String SR_AP_SPECIALIST = "Accounts Receiveable Specialist Sr";
+	
+	public static String LOGIN_SUCCESS_ACTIVITY = "LOGIN SUCCESS";
+	
+	public static String LOGIN_FAIL_ACTIVITY = "LOGIN FAILED";
+	
+	public static String PASSWORD_RESET_ACTIVITY = "RESET PASSWORD";
+	
+	public static String FORGOT_USER_ACTIVITY = "FORGOT USER";
+	
+	public static String FORGOT_USER_PASSWORD = "FORGOT USER PASSWORD";
 }

@@ -39,7 +39,6 @@ public class LoginEntity implements java.io.Serializable {
 
 	@Id
 	@GeneratedValue(strategy = IDENTITY)
-
 	@Column(name = "loginId", unique = true, nullable = false)
 	public Integer getLoginId() {
 		return this.loginId;

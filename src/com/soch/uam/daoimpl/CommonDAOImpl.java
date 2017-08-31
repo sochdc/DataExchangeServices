@@ -14,15 +14,19 @@ import org.springframework.stereotype.Component;
 import com.soch.uam.dao.CommonDAO;
 import com.soch.uam.domain.ContractCompanyEntity;
 import com.soch.uam.domain.DeptEntity;
+import com.soch.uam.domain.DocumentsEntity;
 import com.soch.uam.domain.OnboardApprovalPendingEntity;
 import com.soch.uam.domain.OnboardingApprovalEntity;
 import com.soch.uam.domain.OnboardingUserNotesEntity;
 import com.soch.uam.domain.PolicyConfigEntity;
 import com.soch.uam.domain.PolicyGrpEntity;
 import com.soch.uam.domain.PolicySrcEntity;
+import com.soch.uam.domain.PolicySrcNotesEntity;
+import com.soch.uam.domain.RoleMappingEntity;
 import com.soch.uam.domain.RolesEntity;
 import com.soch.uam.domain.SystemEntity;
 import com.soch.uam.domain.UserFileEntity;
+import com.soch.uam.domain.UserNotesEntity;
 import com.soch.uam.domain.UserTypeEntity;
 import com.soch.uam.svc.constants.APPConstants;
 
@@ -156,11 +160,13 @@ public class CommonDAOImpl implements CommonDAO{
 		
 		return criteria.list();
 	}
+	
 
 	@Override
 	public List<SystemEntity> getSystems(int deptId) {
 		Criteria criteria =  this.sessionFactory.getCurrentSession().createCriteria(SystemEntity.class);
-		criteria.add(Restrictions.eq("deptEntity.deptId", deptId));
+		if(deptId != 0)
+			criteria.add(Restrictions.eq("deptEntity.deptId", deptId));
 		return criteria.list();
 	}
 
@@ -312,6 +318,7 @@ public class CommonDAOImpl implements CommonDAO{
 	public int getOnboardApprovalMaxLevel(Integer roleID) {
 		Criteria criteria = this.sessionFactory.getCurrentSession().createCriteria(OnboardingApprovalEntity.class)
 			    .setProjection(Projections.max("level"));
+		criteria.add(Restrictions.eq("rolesEntity.roleId", roleID));
 			Integer maxlevel = (Integer)criteria.uniqueResult();	
 		return maxlevel;
 	}
@@ -326,7 +333,80 @@ public class CommonDAOImpl implements CommonDAO{
 		criteria.add(Restrictions.eq("activeStatus", true));
 		return (OnboardingApprovalEntity)criteria.list().get(0);
 	}
+
+	@Override
+	public void saveuserNotes(UserNotesEntity userNotesEntity) {
+		this.sessionFactory.getCurrentSession().save(userNotesEntity);
+		
+	}
+
+	@Override
+	public List<RoleMappingEntity> getRoleMapping() {
+		Criteria criteria =  this.sessionFactory.getCurrentSession().createCriteria(RoleMappingEntity.class);
+		return criteria.list();
+	}
+
+	@Override
+	public void savePolicySrcNotes(PolicySrcNotesEntity policySrcNotesEntity) {
+		this.sessionFactory.getCurrentSession().save(policySrcNotesEntity);
+		
+	}
+
+	@Override
+	public List<PolicySrcNotesEntity> getPolicyNotes(Integer policyId) {
+		Criteria criteria =  this.sessionFactory.getCurrentSession().createCriteria(PolicySrcNotesEntity.class);
+		criteria.add(Restrictions.eq("policySrcEntity.policyId", policyId));
+		return criteria.list();
+	}
+
+	@Override
+	public List<RolesEntity> getAllRoles() {
+		Criteria criteria =  this.sessionFactory.getCurrentSession().createCriteria(RolesEntity.class);
+		return criteria.list();
+	}
 	
+	
+	@Override
+	public List<DocumentsEntity> getDashboardFiles() {
+		Criteria criteria =  this.sessionFactory.getCurrentSession().createCriteria(DocumentsEntity.class);
+		criteria.add(Restrictions.eq("activeFlag", true));
+		return criteria.list();
+	}
+
+	@Override
+	public DocumentsEntity getDashboardFiles(int id) {
+		Criteria criteria =  this.sessionFactory.getCurrentSession().createCriteria(DocumentsEntity.class);
+		criteria.add(Restrictions.eq("documentId", id));
+		criteria.add(Restrictions.eq("activeFlag", true));
+		List<DocumentsEntity> documentsEntities = criteria.list();
+		DocumentsEntity documentsEntity = null;
+		if(!documentsEntities.isEmpty())
+		{
+			documentsEntity = documentsEntities.get(0);
+		}
+			
+		return documentsEntity;
+	}
+
+	@Override
+	public void updatedDashboardFile(DocumentsEntity documentsEntity) {
+		this.sessionFactory.getCurrentSession().update(documentsEntity);
+		
+	}
+
+	@Override
+	public int saveDashboardFile(DocumentsEntity documentsEntity) {
+		this.sessionFactory.getCurrentSession().save(documentsEntity);
+		return 0;
+	}
+
+	@Override
+	public DeptEntity getDepartment(String departmentName) {
+		Criteria criteria =  this.sessionFactory.getCurrentSession().createCriteria(DeptEntity.class);
+		criteria.add(Restrictions.eq("deptName", departmentName));
+		DeptEntity deptEntity =  (DeptEntity) criteria.list().get(0);
+		return deptEntity;
+	}
 	
 
 }

@@ -32,7 +32,7 @@ public class UserEntity implements Serializable{
 	@Id
 	@Column(name = "ID")
 	@GeneratedValue(strategy = GenerationType.TABLE, generator="userSeqGen")
-	 @TableGenerator(
+	@TableGenerator(
 		        name="userSeqGen", 
 		        table="SEQ_TB", 
 		        pkColumnName="seq_name", 
@@ -113,6 +113,16 @@ public class UserEntity implements Serializable{
 	
 	@OneToMany(fetch = FetchType.LAZY, mappedBy = "userEntity")
 	private Set<OnboardingApprovalEntity> onboardingApprovalEntity = new HashSet<OnboardingApprovalEntity>(0);
+	
+	@OneToMany(fetch = FetchType.LAZY, mappedBy = "userEntity",cascade=CascadeType.ALL)
+	private Set<UserNotesEntity> userNotesEntities = new HashSet<UserNotesEntity>(0);
+	
+	@OneToMany(fetch = FetchType.LAZY, mappedBy = "userEntity",cascade=CascadeType.ALL)
+	@OrderBy("createdTs desc")
+	private Set<PwdHistoryEntity> pwdHistoryEntities = new HashSet<PwdHistoryEntity>(0);
+	
+	@OneToMany(fetch = FetchType.LAZY, mappedBy = "userEntity",cascade=CascadeType.ALL)
+	private Set<UserActivityEntity> userActivityEntities = new HashSet<UserActivityEntity>(0);
 	
 	
 	public UserWorkEntity getUserWorkEntity() {
@@ -316,5 +326,30 @@ public class UserEntity implements Serializable{
 	public void setOnboardingApprovalEntity(Set<OnboardingApprovalEntity> onboardingApprovalEntity) {
 		this.onboardingApprovalEntity = onboardingApprovalEntity;
 	}
+
+	public Set<UserNotesEntity> getUserNotesEntities() {
+		return userNotesEntities;
+	}
+
+	public void setUserNotesEntities(Set<UserNotesEntity> userNotesEntities) {
+		this.userNotesEntities = userNotesEntities;
+	}
+
+	public Set<PwdHistoryEntity> getPwdHistoryEntities() {
+		return pwdHistoryEntities;
+	}
+
+	public void setPwdHistoryEntities(Set<PwdHistoryEntity> pwdHistoryEntities) {
+		this.pwdHistoryEntities = pwdHistoryEntities;
+	}
+
+	public Set<UserActivityEntity> getUserActivityEntities() {
+		return userActivityEntities;
+	}
+
+	public void setUserActivityEntities(Set<UserActivityEntity> userActivityEntities) {
+		this.userActivityEntities = userActivityEntities;
+	}
+	
 	
 }

@@ -4,37 +4,59 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+import javax.validation.Valid;
+
+import org.omg.PortableInterceptor.USER_EXCEPTION;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Controller;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.client.RestTemplate;
 
 import com.soch.uam.dto.ContractCompayDTO;
 import com.soch.uam.dto.DepartmentDTO;
+import com.soch.uam.dto.ExternalSourceRoleDTO;
 import com.soch.uam.dto.OnboardApprovalPendingDTO;
+import com.soch.uam.dto.OnboardApprovedDTO;
 import com.soch.uam.dto.OnboardingApprovalDTO;
 import com.soch.uam.dto.PendingApprovalResp;
+import com.soch.uam.dto.PolicySrcNotesDTO;
 import com.soch.uam.dto.RolesDTO;
 import com.soch.uam.dto.SystemDTO;
 import com.soch.uam.dto.TempUserDTO;
 import com.soch.uam.dto.UserDTO;
+import com.soch.uam.dto.UserLoginReport;
 import com.soch.uam.dto.policy.AddNewPolicyDTO;
 import com.soch.uam.dto.policy.PolicyConfigDTO;
+import com.soch.uam.dto.policy.PolicyConfigVO;
 import com.soch.uam.dto.policy.PolicySrcDTO;
 import com.soch.uam.request.AddRoleReq;
+import com.soch.uam.request.AddUserRoleReq;
 import com.soch.uam.request.ContactUsReq;
+import com.soch.uam.request.FileUploadReq;
+import com.soch.uam.request.ReportReq;
+import com.soch.uam.request.UserProfileResp;
+import com.soch.uam.request.UserReportReq;
+import com.soch.uam.request.UserReportResp;
 import com.soch.uam.request.UserSVCReq;
 import com.soch.uam.response.CommonResp;
 import com.soch.uam.response.DeptSysRoleResp;
 import com.soch.uam.response.OnboardingReq;
 import com.soch.uam.response.PolicySVCResp;
+import com.soch.uam.response.ReportResp;
+import com.soch.uam.response.RoleMappingResp;
+import com.soch.uam.response.UAMBaseResp;
+import com.soch.uam.response.UAMUIResponse;
 import com.soch.uam.response.UserReq;
 import com.soch.uam.response.UserSVCResp;
 import com.soch.uam.service.CommonService;
+import com.soch.uam.service.ReportService;
 import com.soch.uam.service.UserService;
 
 @Controller
@@ -56,11 +78,14 @@ public class UAMController {
 	UserService userService;
 	
 	@Autowired
+	ReportService reportService;
+	
+	@Autowired
 	CommonService commonService;
 	
 	@RequestMapping(value = "/signup", method = RequestMethod.POST)
 	 @ResponseBody
-	 public UserSVCResp signupUser(@RequestBody  UserSVCReq userSVCReq)
+	 public UserSVCResp signupUser(@RequestBody @Valid UserSVCReq userSVCReq)
 		{
 			
 			UserDTO userDTO = userService.signUpUser(userSVCReq.getUser());
@@ -97,25 +122,21 @@ public class UAMController {
 			UserSVCResp userSVCResp = new UserSVCResp();
 			
 			
-			if(userService.resetPwd(userSVCReq.getUser())) {
+			if(userService.resetPwd(userSVCReq.getUser()) == 0) {
 			userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.AVAILABLE.CODE",null, Locale.getDefault())));
 			userSVCResp.setresultString(messageSource.getMessage("USER.ID.AVAILABLE.STRING",null, Locale.getDefault()));
 			}
-			else
+			else if(userService.resetPwd(userSVCReq.getUser()) == 1) {
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("INVALID.TOKEN.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.PASSWORD.RESET.EXISTING.STRING",null, Locale.getDefault()));
+				}
+				else
 			{
 				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("INVALID.TOKEN.CODE",null, Locale.getDefault())));
 				userSVCResp.setresultString(messageSource.getMessage("INVALID.TOKEN.STRING",null, Locale.getDefault()));
 			}
 			
-			/*\\ if(userService.validateDemoUser(userSVCReq.getUser()))
-			 {
-					userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.AVAILABLE.CODE",null, Locale.getDefault())));
-					userSVCResp.setresultString(messageSource.getMessage("USER.ID.AVAILABLE.STRING",null, Locale.getDefault()));
-				}
-				else {
-					userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.NOTAVAILABLE.CODE",null, Locale.getDefault())));
-					userSVCResp.setresultString(messageSource.getMessage("USER.ID.NOTAVAILABLE.STRING",null, Locale.getDefault()));
-				}*/
+		
 			return userSVCResp;
 		}
 	
@@ -164,8 +185,57 @@ public class UAMController {
 	 //signIn
 	 
 	 @RequestMapping(value = "/signIn", method = RequestMethod.POST)
-	 @ResponseBody	
-	 public UserSVCResp signIn(@RequestBody  UserSVCReq userSVCReq)
+	 @ResponseBody
+	 public UserSVCResp signIn(@RequestBody  UserDTO userDTO)
+		{
+			UserSVCResp userSVCResp = new UserSVCResp();
+			userDTO =  userService.signInUser(userDTO);
+			System.out.println(userDTO.isLockFlag());
+			if(userDTO.getUserId() == null)
+			{
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.LOGIN.FAILURE.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.LOGIN.FAILURE.STRING",null, Locale.getDefault()));
+			}
+			
+			else if(userDTO!= null && userDTO.isLockFlag())
+			{
+				
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ACCOUNT.LOCK.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.ACCOUNT.LOCK.STRING",null, Locale.getDefault()));
+				userSVCResp.setUser(userDTO);
+			}
+			else if(userDTO!= null && userDTO.isMaxAttemptReached())
+			{
+				
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ACCOUNT.MAXATTEMPTS.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.ACCOUNT.MAXATTEMPTS.STRING",null, Locale.getDefault()));
+				userSVCResp.setUser(userDTO);
+			}
+			else if(userDTO!= null && !userDTO.isActiveFlag())
+			{
+				
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ACCOUNT.INACTIVE.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.ACCOUNT.INACTIVE.STRING",null, Locale.getDefault()));
+				userSVCResp.setUser(userDTO);
+			}
+			else if(userDTO!= null && userDTO.isPwdChangeFlag())
+			{
+				
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.PASSWORD.RESET.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.PASSWORD.RESET.STRING",null, Locale.getDefault()));
+				userSVCResp.setUser(userDTO);
+			}
+			else if(userDTO!= null && userDTO.isActiveFlag())
+			{
+				
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.LOGIN.SUCCESS.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.LOGIN.SUCCESS.STRING",null, Locale.getDefault()));
+				userSVCResp.setUser(userDTO);
+			}
+			return userSVCResp;
+		}
+	 
+	 /*public UserSVCResp signIn(@RequestBody  UserSVCReq userSVCReq)
 		{
 			UserSVCResp userSVCResp = new UserSVCResp();
 			UserDTO userDTO =  userService.signInUser(userSVCReq.getUser());
@@ -212,7 +282,7 @@ public class UAMController {
 				userSVCResp.setUser(userDTO);
 			}
 			return userSVCResp;
-		}
+		}*/
 	 	
 	 @RequestMapping(value = "/forgotUserIdSvc", method = RequestMethod.GET)
 	 @ResponseBody
@@ -455,12 +525,12 @@ public class UAMController {
 	 
 	 //
 	 
-	 @RequestMapping(value = "/changeUserStatusSVC", method = RequestMethod.GET)
+	 @RequestMapping(value = "/changeUserStatusSVC", method = RequestMethod.POST)
 	 @ResponseBody	
-	 public UserSVCResp changeUserStatusSVC(@RequestParam(value="userId") String userId) {
+	 public UserSVCResp changeUserStatusSVC(@RequestBody  UserReq userReq) {
 		 UserSVCResp userSVCResp = new UserSVCResp();
 			
-		 	UserDTO userDTO = userService.changeUserStatus(userId);
+		 	UserDTO userDTO = userService.changeUserStatus(userReq);
 		 	
 		 	userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.UPDATE.SUCCESS.CODE",null, Locale.getDefault())));
 			userSVCResp.setresultString(messageSource.getMessage("USER.UPDATE.SUCCESS.STRING",null, Locale.getDefault()));
@@ -481,32 +551,31 @@ public class UAMController {
 	 
 	 @RequestMapping(value = "/searchUserSVC", method = RequestMethod.POST)
 	 @ResponseBody	
-	 public UserSVCResp searchUserSVC(@RequestBody  UserReq userReq)
+	 public UserProfileResp searchUserSVC(@RequestBody  UserReq userReq)
 		{
-			UserSVCResp userSVCResp = new UserSVCResp();
+		 UserProfileResp userProfileResp = new UserProfileResp();
+		 userProfileResp =  userService.searchUser(userReq);
 			
-			UserDTO userDTO = userService.searchUser(userReq);
 			
-			if(userDTO != null)
+			if(userProfileResp.getUserId() != null)
 			{
-				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.AVAILABLE.CODE",null, Locale.getDefault())));
-				userSVCResp.setresultString(messageSource.getMessage("USER.ID.AVAILABLE.STRING",null, Locale.getDefault()));
-				userSVCResp.setUser(userDTO);
+				userProfileResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.AVAILABLE.CODE",null, Locale.getDefault())));
+				userProfileResp.setresultString(messageSource.getMessage("USER.ID.AVAILABLE.STRING",null, Locale.getDefault()));
 			}
 			else {
-				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.NOTAVAILABLE.CODE",null, Locale.getDefault())));
-				userSVCResp.setresultString(messageSource.getMessage("USER.ID.NOTAVAILABLE.STRING",null, Locale.getDefault()));
+				userProfileResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.NOTAVAILABLE.CODE",null, Locale.getDefault())));
+				userProfileResp.setresultString(messageSource.getMessage("USER.ID.NOTAVAILABLE.STRING",null, Locale.getDefault()));
 			}
 			
-			return userSVCResp;
+			return userProfileResp;
 		}
 	 
-	 @RequestMapping(value = "/changeLockStatusSVC", method = RequestMethod.GET)
+	 @RequestMapping(value = "/changeLockStatusSVC", method = RequestMethod.POST)
 	 @ResponseBody	
-	 public UserSVCResp changeLockStatusSVC(@RequestParam(value="userId") String userId) {
+	 public UserSVCResp changeLockStatusSVC(@RequestBody  UserReq userReq) {
 		 UserSVCResp userSVCResp = new UserSVCResp();
 			
-		 	UserDTO userDTO = userService.changeLockStatus(userId);
+		 	UserDTO userDTO = userService.changeLockStatus(userReq);
 		 	
 		 	userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.UPDATE.SUCCESS.CODE",null, Locale.getDefault())));
 			userSVCResp.setresultString(messageSource.getMessage("USER.UPDATE.SUCCESS.STRING",null, Locale.getDefault()));
@@ -515,12 +584,12 @@ public class UAMController {
 	 }
 	 
 	 //resetPasswordSVC
-	 @RequestMapping(value = "/resetPasswordSVC", method = RequestMethod.GET)
+	 @RequestMapping(value = "/resetPasswordSVC", method = RequestMethod.POST)
 	 @ResponseBody	
-	 public UserSVCResp resetPasswordSVC(@RequestParam(value="userId") String userId) {
+	 public UserSVCResp resetPasswordSVC(@RequestBody  UserReq userReq) {
 		 UserSVCResp userSVCResp = new UserSVCResp();
 			
-		 	UserDTO userDTO = userService.resetUserPwd(userId);
+		 	UserDTO userDTO = userService.resetUserPwd(userReq);
 		 	
 		 	userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.UPDATE.SUCCESS.CODE",null, Locale.getDefault())));
 			userSVCResp.setresultString(messageSource.getMessage("USER.UPDATE.SUCCESS.STRING",null, Locale.getDefault()));
@@ -625,6 +694,30 @@ public class UAMController {
 			return pendingApprovalResp;
 		}
 	 
+	 @RequestMapping(value = "/getCreatedBySVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public PendingApprovalResp getCreatedBySVC(@RequestParam(value="id") int userId)
+		{
+		 PendingApprovalResp pendingApprovalResp = new PendingApprovalResp();
+		 	 Set<OnboardApprovalPendingDTO> approvalPendingDTOs = userService.getCreatedBy(userId);
+		 	pendingApprovalResp.setOnboardApprovalPendingDTOs(approvalPendingDTOs);
+		 	pendingApprovalResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.REGISTRATION.SUCCUESS.CODE",null, Locale.getDefault())));
+		 	pendingApprovalResp.setresultString(messageSource.getMessage("USER.REGISTRATION.SUCCUESS.STATUS",null, Locale.getDefault()));
+			return pendingApprovalResp;
+		}
+	 
+	 @RequestMapping(value = "/getApprovedRequestsSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public PendingApprovalResp getApprovedRequestsSVC(@RequestParam(value="id") int userId)
+		{
+		 PendingApprovalResp pendingApprovalResp = new PendingApprovalResp();
+		 List<OnboardApprovedDTO> approvalPendingDTOs = userService.getApprovedRequests(userId);
+		 	pendingApprovalResp.setOnboardApprovedDTOs(approvalPendingDTOs);
+		 	pendingApprovalResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.REGISTRATION.SUCCUESS.CODE",null, Locale.getDefault())));
+		 	pendingApprovalResp.setresultString(messageSource.getMessage("USER.REGISTRATION.SUCCUESS.STATUS",null, Locale.getDefault()));
+			return pendingApprovalResp;
+		}
+	 
 	 @RequestMapping(value = "/getTempUserSVC", method = RequestMethod.GET)
 	 @ResponseBody	
 	 public UserSVCResp getTempUserSVC(@RequestParam(value="id") String userId)
@@ -691,6 +784,25 @@ public class UAMController {
 		{
 		 UserSVCResp userSVCResp = new UserSVCResp();
 		 if(userService.validateToken(token, userId))
+		 {
+			 userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("GENERAL.SUCCESS.CODE",null, Locale.getDefault())));
+			 userSVCResp.setresultString(messageSource.getMessage("GENERAL.SUCCESS.STRING",null, Locale.getDefault()));
+		 }
+		 else
+		 {
+			 userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("INVALID.TOKEN.CODE",null, Locale.getDefault())));
+			 userSVCResp.setresultString(messageSource.getMessage("INVALID.TOKEN.STRING",null, Locale.getDefault()));
+		 }
+	
+		 return userSVCResp;
+		}
+	 
+	 @RequestMapping(value = "/refreshTokenSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public UserSVCResp refreshTokenSVC(@RequestParam(value="token") String token,@RequestParam(value="userId") Integer userId)
+		{
+		 UserSVCResp userSVCResp = new UserSVCResp();
+		 if(userService.refreshToken(token, userId))
 		 {
 			 userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("GENERAL.SUCCESS.CODE",null, Locale.getDefault())));
 			 userSVCResp.setresultString(messageSource.getMessage("GENERAL.SUCCESS.STRING",null, Locale.getDefault()));
@@ -782,10 +894,294 @@ public class UAMController {
 		 return commonResp;
 		}
 	 
-	 //getContractCompanyListSVC
+	 @RequestMapping(value = "/addUserRoleSVC", method = RequestMethod.POST)
+	 @ResponseBody	
+	 public UserProfileResp addUserRoleSVC(@RequestBody  AddUserRoleReq addUserRoleReq)
+		{
+			 UserProfileResp userProfileResp = new UserProfileResp();
+			 userProfileResp =  userService.addRole(addUserRoleReq);
+				
+				
+				if(userProfileResp.getUserId() != null)
+				{
+					userProfileResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.AVAILABLE.CODE",null, Locale.getDefault())));
+					userProfileResp.setresultString(messageSource.getMessage("USER.ID.AVAILABLE.STRING",null, Locale.getDefault()));
+				}
+				else {
+					userProfileResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.NOTAVAILABLE.CODE",null, Locale.getDefault())));
+					userProfileResp.setresultString(messageSource.getMessage("USER.ID.NOTAVAILABLE.STRING",null, Locale.getDefault()));
+				}
+				
+				return userProfileResp;
+		}
 	 
-	 //fetchTempUserNotes
+	 @RequestMapping(value = "/getUserProfileSVC", method = RequestMethod.GET)
+	 @ResponseBody	
+	 public UserProfileResp getUserProfileSVC(@RequestParam(value="userId") Integer userId)
+		{
+		 UserProfileResp userProfileResp = new UserProfileResp();
+		 userProfileResp =  userService.getUserProfile(userId);
+			
+			
+			if(userProfileResp.getUserId() != null)
+			{
+				userProfileResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.AVAILABLE.CODE",null, Locale.getDefault())));
+				userProfileResp.setresultString(messageSource.getMessage("USER.ID.AVAILABLE.STRING",null, Locale.getDefault()));
+			}
+			else {
+				userProfileResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.NOTAVAILABLE.CODE",null, Locale.getDefault())));
+				userProfileResp.setresultString(messageSource.getMessage("USER.ID.NOTAVAILABLE.STRING",null, Locale.getDefault()));
+			}
+			
+			return userProfileResp;
+		}
+	 
+	 
+		@RequestMapping(value="/deleteRoleSVC", method = RequestMethod.GET )
+		@ResponseBody
+	    public UserProfileResp deleteRoleSVC(@RequestParam(value="userRoleId") Integer userRoleId)
+		{
+			UserProfileResp userProfileResp = new UserProfileResp();
+			userProfileResp = userService.deleteRole(userRoleId);
+			return userProfileResp;
+	    }
+		
+		@RequestMapping(value="/getRoleMappingSVC", method = RequestMethod.GET )
+		@ResponseBody
+	    public RoleMappingResp getRoleMappingSVC()
+		{
+			RoleMappingResp roleMappingResp = commonService.getRoleMapping();
+			return roleMappingResp;
+	    }
+	 
+		@RequestMapping(value="/addPolicyNotesSVC", method = RequestMethod.POST )
+		@ResponseBody
+	    public UAMUIResponse addPolicyNotesSVC(@RequestBody  PolicyConfigVO policyConfigVO)
+		{
+			UAMUIResponse uamuiResponse = new UAMUIResponse();
+			
+			commonService.addPolicyNotes(policyConfigVO);
+			
+			return uamuiResponse;
+		}
+		
+		@RequestMapping(value="/getPolicyNotesSVC", method = RequestMethod.GET )
+		@ResponseBody
+	    public PolicySVCResp getPolicyNotesSVC(@RequestParam(value="policyId") Integer policyId)
+		{
+			PolicySVCResp policySVCResp = new PolicySVCResp();
+			
+			Set<PolicySrcNotesDTO> policySrcNotesDTOs = commonService.getPolicyNotes(policyId);
+			policySVCResp.setPolicySrcNotesDTOs(policySrcNotesDTOs);
+			
+			policySVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("GENERAL.SUCCESS.CODE",null, Locale.getDefault())));
+			policySVCResp.setresultString(messageSource.getMessage("GENERAL.SUCCESS.STRING",null, Locale.getDefault()));
+			
+			return policySVCResp;
+		}
+		
+		@RequestMapping(value="/searchExternalRoleSVC", method = RequestMethod.GET )
+		@ResponseBody
+	    public RoleMappingResp searchExternalRoleSVC(@RequestParam(value="roleId") String roleId)
+		{
+			RoleMappingResp roleMappingResp = new RoleMappingResp();
+			
+			ExternalSourceRoleDTO externalSourceRoleDTO = commonService.getExternalRole(roleId);
+			
+			if(externalSourceRoleDTO != null) 
+			{
+				roleMappingResp.setExternalSourceRoleDTO(externalSourceRoleDTO);
+				roleMappingResp.setResultCode(Integer.parseInt(messageSource.getMessage("GENERAL.SUCCESS.CODE",null, Locale.getDefault())));
+				roleMappingResp.setresultString(messageSource.getMessage("GENERAL.SUCCESS.STRING",null, Locale.getDefault()));
+			}
+			else
+			{
+				roleMappingResp.setResultCode(Integer.parseInt(messageSource.getMessage("GENERAL.FAILURE.CODE",null, Locale.getDefault())));
+				roleMappingResp.setresultString(messageSource.getMessage("GENERAL.FAILURE.STRING",null, Locale.getDefault()));
+			}
+			
+			return roleMappingResp;
+		}
+		
+		@RequestMapping(value="/getuserLoginSVC", method = RequestMethod.POST )
+		@ResponseBody
+	    public UserReportResp getuserLoginSVC(@RequestBody  UserReportReq userReportReq)
+		{
+			UserReportResp userReportResp = null;
+			userReportResp = reportService.getUserLogin(userReportReq);
+			if(userReportResp != null)
+			{
+				userReportResp.setResultCode(Integer.parseInt(messageSource.getMessage("GENERAL.FAILURE.CODE",null, Locale.getDefault())));
+				userReportResp.setresultString(messageSource.getMessage("GENERAL.FAILURE.STRING",null, Locale.getDefault()));
+			}
+			else
+			{
+				userReportResp = new UserReportResp();
+				userReportResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.NOTAVAILABLE.CODE",null, Locale.getDefault())));
+				userReportResp.setresultString(messageSource.getMessage("USER.ID.NOTAVAILABLE.STRING",null, Locale.getDefault()));
+			}
+			
+			return userReportResp;
+		}
+	 
+		
+		@RequestMapping(value="/fetchAciveLoginsSVC", method = RequestMethod.GET )
+		@ResponseBody
+	    public UserReportResp fetchAciveLoginsSVC()
+		{
+			UserReportResp userReportResp = null;
+			
+			userReportResp = reportService.fetchAciveLoginsSVC();
+			
+			if(userReportResp != null)
+			{
+				userReportResp.setResultCode(Integer.parseInt(messageSource.getMessage("GENERAL.FAILURE.CODE",null, Locale.getDefault())));
+				userReportResp.setresultString(messageSource.getMessage("GENERAL.FAILURE.STRING",null, Locale.getDefault()));
+			}
+			else
+			{
+				userReportResp = new UserReportResp();
+				userReportResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.NOTAVAILABLE.CODE",null, Locale.getDefault())));
+				userReportResp.setresultString(messageSource.getMessage("USER.ID.NOTAVAILABLE.STRING",null, Locale.getDefault()));
+			}
+			
+			return userReportResp;
+		}
+		
+		
+		@RequestMapping(value="/fetchInaciveLoginsSVC", method = RequestMethod.GET )
+		@ResponseBody
+	    public UserReportResp fetchInaciveLoginsSVC(@RequestParam(value="days") int days )
+		{
+			UserReportResp userReportResp = null;
+			
+			userReportResp = reportService.getInactiveUsers(days);
+			
+			if(userReportResp != null)
+			{
+				userReportResp.setResultCode(Integer.parseInt(messageSource.getMessage("GENERAL.FAILURE.CODE",null, Locale.getDefault())));
+				userReportResp.setresultString(messageSource.getMessage("GENERAL.FAILURE.STRING",null, Locale.getDefault()));
+			}
+			else
+			{
+				userReportResp = new UserReportResp();
+				userReportResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.NOTAVAILABLE.CODE",null, Locale.getDefault())));
+				userReportResp.setresultString(messageSource.getMessage("USER.ID.NOTAVAILABLE.STRING",null, Locale.getDefault()));
+			}
+			
+			return userReportResp;
+		}
+		
+		
+		@RequestMapping(value="/userActivityReportSVC", method = RequestMethod.POST )
+		@ResponseBody
+	    public UserReportResp userActivityReportSVC(@RequestBody  UserReportReq userReportReq)
+		{
+			UserReportResp userReportResp = null;
+			userReportResp = reportService.userActivityReport(userReportReq);
+			if(userReportResp != null)
+			{
+				userReportResp.setResultCode(Integer.parseInt(messageSource.getMessage("GENERAL.FAILURE.CODE",null, Locale.getDefault())));
+				userReportResp.setresultString(messageSource.getMessage("GENERAL.FAILURE.STRING",null, Locale.getDefault()));
+			}
+			else
+			{
+				userReportResp = new UserReportResp();
+				userReportResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ID.NOTAVAILABLE.CODE",null, Locale.getDefault())));
+				userReportResp.setresultString(messageSource.getMessage("USER.ID.NOTAVAILABLE.STRING",null, Locale.getDefault()));
+			}
+			
+			return userReportResp;
+		}
+		
+		
+		@RequestMapping(value="/getDashboardFilesSVC", method = RequestMethod.GET )
+		@ResponseBody
+	    public CommonResp getDashboardFilesSVC()
+		{
+			CommonResp commonResp = new CommonResp();
+			commonResp = commonService.getDashboardFiles();
+			
+			return commonResp;
+		}
+		
+		
+		@RequestMapping(value="/downloadFileSVC", method = RequestMethod.GET )
+		@ResponseBody
+	    public String downloadFileSVC(@RequestParam(value="id") int id)
+		{
+			String content = commonService.getFile(id);
+			return content;
+		}
+		
+		@RequestMapping(value="/deleteFileSVC", method = RequestMethod.GET )
+		@ResponseBody
+	    public Integer deleteFileSVC(@RequestParam(value="fileId") int fileId,@RequestParam(value="id") int id)
+		{
+			Integer content = commonService.deleteFile(fileId, id);
+			return content;
+		}
+		//deleteFileSVC
+		@RequestMapping(value="/getReportSVC", method = RequestMethod.POST )
+		@ResponseBody
+	    public ReportResp getReportSVC(@RequestBody  ReportReq reportReq)
+		{
+			ReportResp reportResp = commonService.retReport(reportReq);
+			return reportResp;
+		}
+		
+		@RequestMapping(value="/getUsersSVC", method = RequestMethod.GET )
+		@ResponseBody
+	    public UserSVCResp getUsersSVC()
+		{
+			UserSVCResp userSVCResp = new UserSVCResp();
+			List<UserDTO> userDTOs = userService.getUsers();
+			userSVCResp.setUserDTOs(userDTOs);;
+			return userSVCResp;
+		}
+		
+		
+		@RequestMapping(value="/fileUploadSVC", method = RequestMethod.POST )
+		@ResponseBody
+	    public UAMBaseResp fileUploadSVC(@RequestBody  FileUploadReq fileUploadReq)
+		{
+			UAMBaseResp uamBaseResp = new UAMBaseResp();
+			int status = commonService.uploadDashboardFile(fileUploadReq);
+			
+			uamBaseResp.setResultCode(Integer.parseInt(messageSource.getMessage("GENERAL.SUCCESS.CODE",null, Locale.getDefault())));
+			uamBaseResp.setresultString(messageSource.getMessage("GENERAL.SUCCESS.STRING",null, Locale.getDefault()));
+			
+			return uamBaseResp;
+		}
+		
+		
+		@RequestMapping(value="/getDepartmentUsers", method = RequestMethod.GET )
+		@ResponseBody
+	    public UserSVCResp getDepartmentUsers(@RequestParam(value="departmentName") String departmentName)
+		{
+			UserSVCResp userSVCResp = new UserSVCResp();
+			 List<UserDTO> userDTOs = commonService.getDepartmentUsers(departmentName);
+			
+			 userSVCResp.setUserDTOs(userDTOs);
+			return userSVCResp;
+		}
+		
+		
+		@RequestMapping(value="/getUsersOnRoleSVC", method = RequestMethod.GET )
+		@ResponseBody
+	    public UserReportResp getUsersOnRoleSVC(@RequestParam(value="id") int roleId)
+		{
+			UserReportResp userReportResp = null;
+			userReportResp = reportService.getUsersOnRole(roleId);
+			
+			return userReportResp;
+		}
+		
+	 //getUsersOnRole
+	 
+	 //
 	 
 	 //getOnboardUser
 	 
 }
+
