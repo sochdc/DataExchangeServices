@@ -69,7 +69,6 @@ public class UAMController {
 	@RequestMapping(value="/register/{userId}", method = RequestMethod.GET)
 	public String registerUser( String userId){
 		
-		System.out.println("Test");
 		return "Test";
 
     }
@@ -190,7 +189,6 @@ public class UAMController {
 		{
 			UserSVCResp userSVCResp = new UserSVCResp();
 			userDTO =  userService.signInUser(userDTO);
-			System.out.println(userDTO.isLockFlag());
 			if(userDTO.getUserId() == null)
 			{
 				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.LOGIN.FAILURE.CODE",null, Locale.getDefault())));
@@ -303,21 +301,34 @@ public class UAMController {
 			return userSVCResp;
 		}
 	 
-	 @RequestMapping(value = "/forgotPWDSvc", method = RequestMethod.GET)
+	 @RequestMapping(value = "/forgotPWDSvc", method = RequestMethod.POST)
 	 @ResponseBody
-	 public UserSVCResp forgotPWDSvc(@RequestParam(value="userId") String userId)
+	 public UserSVCResp forgotPWDSvc(@RequestBody UserSVCReq userSVCReq)
 		{
 			UserSVCResp userSVCResp = new UserSVCResp();
-			UserDTO userDTO = null;
+			UserDTO userDTO = userSVCReq.getUser();
+		
+			userDTO = userService.forgotPassword(userDTO.getUserId(),userDTO.isTempPassword());
 			
-			userDTO = userService.forgotPassword(userId);
-			
-			if(userDTO != null)
+			if(userDTO != null && userDTO.getSecurityQA() != null)
 			{
 				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("FORGOT.USER.ID.FOUND.CODE",null, Locale.getDefault())));
 				userSVCResp.setresultString(messageSource.getMessage("FORGOT.USER.ID.FOUND.STRING",null, Locale.getDefault()));
 				userSVCResp.setUser(userDTO);
-			}else 	if(userDTO.isLockFlag())
+			}
+			else 	if(userDTO.getSecurityQA() == null && userDTO.isTempPassword())
+			{
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.TEMP.PASSWORD.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.TEMP.PASSWORD.STRING",null, Locale.getDefault()));
+				userSVCResp.setUser(userDTO);
+			}
+			else 	if(!userDTO.isSecurityQASelected())
+			{
+				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.SECURITYQA.NOT.SELECTED.CODE",null, Locale.getDefault())));
+				userSVCResp.setresultString(messageSource.getMessage("USER.SECURITYQA.NOT.SELECTED.STRING",null, Locale.getDefault()));
+				userSVCResp.setUser(userDTO);
+			}
+			else 	if(userDTO.isLockFlag())
 			{
 				userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("USER.ACCOUNT.LOCK.CODE",null, Locale.getDefault())));
 				userSVCResp.setresultString(messageSource.getMessage("USER.ACCOUNT.LOCK.STRING",null, Locale.getDefault()));
@@ -848,7 +859,6 @@ public class UAMController {
 		{
 			 UserSVCResp userSVCResp = new UserSVCResp();
 			 int status = commonService.addOnboardApproval(onboardingApprovalDTO);
-			 System.out.println("status "+status);
 			 if(status == 1)
 			 {
 				 userSVCResp.setResultCode(Integer.parseInt(messageSource.getMessage("DUPLICATE.ONBOARD.APPROVAL.CODE",null, Locale.getDefault())));

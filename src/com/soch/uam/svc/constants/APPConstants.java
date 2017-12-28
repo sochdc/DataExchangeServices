@@ -30,6 +30,9 @@ public class APPConstants {
 			" <h4 >This token is valid for 30 Hour(s).</h4>" +
 			"This is an auto generated email. Please do not respond.";
 	
+	public static String TEMP_PWD_EMAIL_TEXT ="Greetings, <br><h4 style=\"color:RED\">Please login temporory password to reset password otpwd.</h4> <br>" +
+			"This is an auto generated email. Please do not respond.";
+	
 	public static Integer IDENTITY_GRP_ID = 1;
 	public static Integer ACCESS_GRP_ID = 2;
 	

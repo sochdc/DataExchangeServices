@@ -14,7 +14,7 @@ public class SendEmail {
 	
 	
 
-	/*public static void main(String[] args) {
+	public static void main(String[] args) {
 		Properties props = new Properties();
 		props.put("mail.smtp.host", "smtp.gmail.com");
 		props.put("mail.smtp.socketFactory.port", "465");
@@ -26,7 +26,7 @@ public class SendEmail {
 		Session session = Session.getDefaultInstance(props,
 			new javax.mail.Authenticator() {
 				protected PasswordAuthentication getPasswordAuthentication() {
-					return new PasswordAuthentication("harish.bodduna@gmail.com","tdnxxtslsixciwwf");
+					return new PasswordAuthentication("PleaseDoNotReply@soch-inc.com","dbzwrwfjrbimcjmz");
 				}
 			});
 
@@ -47,7 +47,7 @@ public class SendEmail {
 		} catch (MessagingException e) {
 			throw new RuntimeException(e);
 		}
-	}*/
+	}
 	
 	public static void sendHTMLEmail(String toEmail, String subject, String body) {
 		Properties props = new Properties();

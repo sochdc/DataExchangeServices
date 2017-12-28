@@ -28,7 +28,7 @@ public interface UserService {
 		
 		public boolean forgotUserId(String email);
 		
-		public UserDTO forgotPassword(String userId);
+		public UserDTO forgotPassword(String userId,boolean tempPwd);
 		
 		public UserDTO validateQA(UserDTO userDTO);
 		

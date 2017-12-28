@@ -363,6 +363,7 @@ public class UserDAOImpl implements UserDAO{
 		criteria.addOrder(Order.desc("createdTs"));
 		criteria.setMaxResults(count);
 		List<PwdHistoryEntity>  pwdHistoryEntities = criteria.list();
+		System.out.println("pwdHistoryEntities.isEmpty() "+pwdHistoryEntities.isEmpty());
 		if(pwdHistoryEntities.isEmpty())
 			return true;
 		else

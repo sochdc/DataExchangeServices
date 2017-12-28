@@ -1,6 +1,9 @@
 package com.soch.uam.serviceimpl;
 
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.lang.reflect.InvocationTargetException;
+import java.security.GeneralSecurityException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -25,6 +28,7 @@ import javax.transaction.Transactional;
 import javax.xml.bind.DatatypeConverter;
 
 import org.apache.commons.beanutils.BeanUtils;
+import org.picketbox.util.EncryptionUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.MessageSource;
 import org.springframework.context.annotation.PropertySource;
@@ -79,6 +83,7 @@ import com.soch.uam.service.UserService;
 import com.soch.uam.svc.constants.APPConstants;
 import com.soch.uam.util.AppUtil;
 import com.soch.uam.util.CopyBeanProperties;
+import com.soch.uam.util.EncryptUtil;
 import com.soch.uam.util.OTPGenerator;
 import com.soch.uam.util.POJOCacheUtil;
 import com.soch.uam.util.SendEmail;
@@ -345,7 +350,6 @@ public class UserServiceImpl implements UserService{
 		if(userEntity!= null )
 		{
 			returnUserDTO.setId(userEntity.getId());
-			System.out.println(returnUserDTO.getId());
 			returnUserDTO.setActiveFlag(userEntity.getActiveFlag());
 			if(userEntity.getLockFlag())
 			{
@@ -365,97 +369,129 @@ public class UserServiceImpl implements UserService{
 				String authToken =generateAuthToken(userEntity);
 				returnUserDTO.setToken(authToken);
 				returnUserDTO.setUserId(userEntity.getUserId());
-			}
-			else if(userEntity.getPassowrd().equals(userDTO.getPassowrd()))
-			{
-		
-			
-				
-			String authToken =generateAuthToken(userEntity);
-			returnUserDTO = CopyBeanProperties.copyUserPerperties(userEntity);
-			returnUserDTO.setToken(authToken);
-			Set<UserRoleEntity> userRoleEntities = userEntity.getUserRoleEntities();
-			for(UserRoleEntity userRoleEntity :userRoleEntities)
-			{
-				if(userRoleEntity.isActiveStatus()){
-				if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Admin"))
-				{
-					returnUserDTO.setRoleName(userRoleEntity.getRolesEntity().getRoleName());
-						returnUserDTO.setAccess(1);
-						break;
+			} else
+				try {
+					if(EncryptUtil.decrypt(userEntity.getPassowrd()).equals(userDTO.getPassowrd()))
+					{	
+						if(policyMap.isEmpty())
+						{
+							getInternalPolicies();
+						}
+						
+						Integer expDays =  Integer.parseInt(policyMap.get("Password Maximum Age (x) Days").toString());
+						returnUserDTO = CopyBeanProperties.copyUserPerperties(userEntity);
+						/*if(userEntity.isPwdChangeFlag())
+						{
+							returnUserDTO.setPwdChangeFlag(true);
+						}
+						else*/ 
+						long lastPwdChange = AppUtil.calculateDaysTillToday(userEntity.getPwdHistoryEntities().iterator().next().getCreatedTs());
+						if(expDays < lastPwdChange)
+						{
+							System.out.println("expDays "+expDays +" "+lastPwdChange);
+							returnUserDTO.setPwdChangeFlag(true);
+							userEntity.setPwdChangeFlag(true);
+							userDAO.updateUser(userEntity);
+						}else
+						{
+						String authToken =generateAuthToken(userEntity);
+					
+					returnUserDTO.setToken(authToken);
+					Set<UserRoleEntity> userRoleEntities = userEntity.getUserRoleEntities();
+					for(UserRoleEntity userRoleEntity :userRoleEntities)
+					{
+						String appName = environment.getRequiredProperty(userDTO.getAppName());
+						if(userRoleEntity.getRolesEntity().getSystemEntity().getSystemName().equalsIgnoreCase(appName) && 
+								userRoleEntity.isActiveStatus()){
+							returnUserDTO.setRoleName(userRoleEntity.getRolesEntity().getRoleName());
+						}
+						else if(userRoleEntity.isActiveStatus()){
+						if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Admin"))
+						{
+							returnUserDTO.setRoleName(userRoleEntity.getRolesEntity().getRoleName());
+								returnUserDTO.setAccess(1);
+								break;
+						}
+						else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Requestor"))
+						{
+							returnUserDTO.setAccess(2);
+							break;
+						}
+						else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Approve"))
+						{
+							returnUserDTO.setAccess(3);
+							break;
+						}
+						else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Implementor"))
+						{
+							returnUserDTO.setAccess(3);
+							break;
+						}
+						else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Report"))
+						{
+							returnUserDTO.setDepartment(userRoleEntity.getRolesEntity().getSystemEntity().getDeptEntity().getDeptName());
+							returnUserDTO.setRoleName(userRoleEntity.getRolesEntity().getRoleName());
+							break;
+						}
+						}
+						
+					}
+						
+					LoginEntity loginEntity = new LoginEntity();
+					loginEntity.setUserEntity(userEntity);
+					loginEntity.setLoginTs(getCurrentDate());
+					loginEntity.setLoginStatus(true);
+					
+					userDAO.saveUserLogin(loginEntity);
+					
+					if(userEntity.getLogintEntity()!= null && userEntity.getLogintEntity().size() > 1)
+					{
+						Iterator<LoginEntity> loginIter = userEntity.getLogintEntity().iterator();
+						LoginEntity loginEntity2 = loginIter.next();
+						loginEntity2 = loginIter.next();
+						returnUserDTO.setLastLoggedin(getLocalTime(loginEntity2.getLoginTs()));
+					}
+					if(userEntity.getLoginFailureCount() >0 )
+					{
+						userEntity.setLoginFailureCount(0);
+						userDAO.updateUser(userEntity);
+					}
+					userActivityEntity.setUserEntity(userEntity);
+					userActivityEntity.setActivityType(APPConstants.LOGIN_SUCCESS_ACTIVITY);
+					userActivityEntity.setActivityCreateTs(new Date());
+					userActivityEntity.setActivityCreatedBy(userEntity.getUserId());
+					userActivityEntity.setActivityStatus(true);
+					userDAO.saveUserActivity(userActivityEntity);
+						}
+					}
+					else
+					{
+						userEntity.setLoginFailureCount(userEntity.getLoginFailureCount()+1);
+						getInternalPolicies();
+						if(userEntity.getLoginFailureCount() >= Integer.parseInt((String) policyMap.get("Consecutive Login Failure Limit (x)")))
+						{
+							userEntity.setLockFlag(true);
+							returnUserDTO.setLockFlag(userEntity.getLockFlag());
+							returnUserDTO.setActiveFlag(userEntity.getActiveFlag());
+							returnUserDTO.setMaxAttemptReached(true);
+							returnUserDTO.setUserId(userEntity.getUserId());
+							returnUserDTO.setId(userEntity.getId());
+						}
+						userDAO.updateUser(userEntity);
+						userActivityEntity.setUserEntity(userEntity);
+						userActivityEntity.setActivityType(APPConstants.LOGIN_FAIL_ACTIVITY);
+						userActivityEntity.setActivityCreateTs(new Date());
+						userActivityEntity.setActivityCreatedBy(userEntity.getUserId());
+						userActivityEntity.setActivityStatus(false);
+						userDAO.saveUserActivity(userActivityEntity);
+					}
+				} catch (NumberFormatException | UnsupportedEncodingException | GeneralSecurityException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
 				}
-				else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Requestor"))
-				{
-					returnUserDTO.setAccess(2);
-					break;
-				}
-				else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Approve"))
-				{
-					returnUserDTO.setAccess(3);
-					break;
-				}
-				else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Implementor"))
-				{
-					returnUserDTO.setAccess(3);
-					break;
-				}
-				else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Report"))
-				{
-					returnUserDTO.setDepartment(userRoleEntity.getRolesEntity().getSystemEntity().getDeptEntity().getDeptName());
-					returnUserDTO.setRoleName(userRoleEntity.getRolesEntity().getRoleName());
-					break;
-				}
-				}
-				
-			}
-			
-			LoginEntity loginEntity = new LoginEntity();
-			loginEntity.setUserEntity(userEntity);
-			loginEntity.setLoginTs(getCurrentDate());
-			loginEntity.setLoginStatus(true);
-			
-			userDAO.saveUserLogin(loginEntity);
-			
-			if(userEntity.getLogintEntity()!= null && userEntity.getLogintEntity().size() > 1)
-			{
-				Iterator<LoginEntity> loginIter = userEntity.getLogintEntity().iterator();
-				LoginEntity loginEntity2 = loginIter.next();
-				loginEntity2 = loginIter.next();
-				returnUserDTO.setLastLoggedin(getLocalTime(loginEntity2.getLoginTs()));
-			}
-			if(userEntity.getLoginFailureCount() >0 )
-			{
-				userEntity.setLoginFailureCount(0);
-				userDAO.updateUser(userEntity);
-			}
-			userActivityEntity.setUserEntity(userEntity);
-			userActivityEntity.setActivityType(APPConstants.LOGIN_SUCCESS_ACTIVITY);
-			userActivityEntity.setActivityCreateTs(new Date());
-			userActivityEntity.setActivityCreatedBy(userEntity.getUserId());
-			userActivityEntity.setActivityStatus(true);
-			userDAO.saveUserActivity(userActivityEntity);
-			}
-			else
-			{
-				userEntity.setLoginFailureCount(userEntity.getLoginFailureCount()+1);
-				getPolicies();
-				if(userEntity.getLoginFailureCount() >= Integer.parseInt((String) policyMap.get("Consecutive Login Failure Limit (x)")))
-				{
-					userEntity.setLockFlag(true);
-					returnUserDTO.setLockFlag(userEntity.getLockFlag());
-					returnUserDTO.setActiveFlag(userEntity.getActiveFlag());
-					returnUserDTO.setMaxAttemptReached(true);
-					returnUserDTO.setUserId(userEntity.getUserId());
-					returnUserDTO.setId(userEntity.getId());
-				}
-				userDAO.updateUser(userEntity);
-				userActivityEntity.setUserEntity(userEntity);
-				userActivityEntity.setActivityType(APPConstants.LOGIN_FAIL_ACTIVITY);
-				userActivityEntity.setActivityCreateTs(new Date());
-				userActivityEntity.setActivityCreatedBy(userEntity.getUserId());
-				userActivityEntity.setActivityStatus(false);
-				userDAO.saveUserActivity(userActivityEntity);
-			}
 		}
 		else
 		{
@@ -536,7 +572,7 @@ public class UserServiceImpl implements UserService{
 
 	@Override
 	@Transactional
-	public UserDTO forgotPassword(String userId) {
+	public UserDTO forgotPassword(String userId,boolean tempPwd) {
 		UserDTO userDTO = new UserDTO();
 		Set<SecurityQADTO> securityQADTOs = new HashSet<SecurityQADTO>();
 		Set<SecurityQADTO> securityQADTOs2 = new HashSet<SecurityQADTO>();
@@ -558,15 +594,41 @@ public class UserServiceImpl implements UserService{
 				userMap.put(userId,  userDTO.getSecurityQA());
 				
 				securityQADTOs = userDTO.getSecurityQA();
-				
-				SecurityQADTO[] securityQADTOArray = securityQADTOs.toArray(new SecurityQADTO[securityQADTOs.size()]);
-				int index = getInex(securityQADTOs.size());
-				
-				SecurityQADTO securityQADTO = securityQADTOArray[index];
-				
-				securityQADTOs2.add(securityQADTO);
-				
-				userDTO.setSecurityQA(securityQADTOs2);
+				if(!tempPwd) 
+				{
+					if(securityQADTOs!= null && !securityQADTOs.isEmpty())
+					{
+					SecurityQADTO[] securityQADTOArray = securityQADTOs.toArray(new SecurityQADTO[securityQADTOs.size()]);
+					int index = getInex(securityQADTOs.size());
+					
+					SecurityQADTO securityQADTO = securityQADTOArray[index];
+					
+					securityQADTOs2.add(securityQADTO);
+					
+					userDTO.setSecurityQA(securityQADTOs2);
+					userDTO.setSecurityQASelected(true);
+					}
+					else
+					{
+						userDTO.setSecurityQASelected(false);
+					}
+				}
+				else
+				{
+					userDTO.setTempPassword(true);
+					String tempPassword = generatePassword();
+					try {
+						String encryptedPWD = EncryptUtil.encrypt(tempPassword);
+						userEntity.setPassowrd(encryptedPWD);
+						userEntity.setPwdChangeFlag(true);
+						userDAO.updateUser(userEntity);
+						sendTempPassword(userEntity,tempPassword);
+					} catch (UnsupportedEncodingException | GeneralSecurityException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					
+				}
 				
 				userActivityEntity = new UserActivityEntity();
 				userActivityEntity.setUserEntity(userEntity);
@@ -728,7 +790,10 @@ public class UserServiceImpl implements UserService{
 					policyMap.put(policyConfigEntity.getPolicyName(), policyConfigEntity.getCustomVal());
 				if(policyConfigEntity.getPolicyGrpEntity().getUserTypeEntity().getTypeName().equalsIgnoreCase("External"))
 					externalPolicyMap.put(policyConfigEntity.getPolicyName(), policyConfigEntity.getCustomVal());
+				
 			}
+			
+			
 		
 	}
 	
@@ -788,6 +853,31 @@ public class UserServiceImpl implements UserService{
 		
 		SendEmail.sendHTMLEmail(toEmail, APPConstants.OTP_EMAIL_SUB, emailBody);
 		return returnVal;
+	}
+	
+	
+	private boolean sendTempPassword(UserEntity userEntity,String tempPwd)
+	{
+		
+		String toEmail = null;
+		boolean returnVal = true;
+		if(userEntity.getEmailId() != null)
+			toEmail = userEntity.getEmailId();
+		else
+			toEmail = userEntity.getUserId();
+		String emailBody = APPConstants.TEMP_PWD_EMAIL_TEXT;
+		emailBody = emailBody.replaceAll("otpwd", tempPwd);
+		getPolicies();
+		Integer validMins = new Integer(0);
+		if(policyMap.size() > 0)
+		{
+			validMins = Integer.parseInt((String) policyMap.get("One Time Password (OTP) Expiry (x) Hours"));
+		}
+		
+		emailBody = emailBody.replaceAll("30", validMins.toString());
+		
+		SendEmail.sendHTMLEmail(toEmail, APPConstants.OTP_EMAIL_SUB, emailBody);
+		return true;
 	}
 
 	@Override
@@ -861,20 +951,26 @@ public class UserServiceImpl implements UserService{
 		PwdHistoryEntity pwdHistoryEntity = null;
 		Set<PwdHistoryEntity> pwdHistoryEntities = null;
 		SecauthtokenEntity secauthtokenEntity = userDAO.getAuthToken(user.getToken());
+		System.out.println("secauthtokenEntity "+secauthtokenEntity);
 		if(secauthtokenEntity != null) {
 		UserEntity userEntity = secauthtokenEntity.getUserEntity();
-		userEntity.setPwdChangeFlag(false);
 		UserActivityEntity userActivityEntity = null;
 		getPolicies();
-		int count = Integer.parseInt(policyMap.get("New Password Cannot Contain (x) Characters From Any Previous Password").toString());
-		
-		if(userDAO.checkPreviousPassword(user.getPassowrd(),userEntity.getId(),count))
+		int count =  10;
+		if(policyMap.get("New Password Cannot Contain (x) Characters From Any Previous Password") != null)
+		count = Integer.parseInt(policyMap.get("New Password Cannot Contain (x) Characters From Any Previous Password").toString());
+		try {
+		if(userDAO.checkPreviousPassword(EncryptUtil.encrypt(user.getPassowrd()),userEntity.getId(),count))
 		{
-			userEntity.setPassowrd(user.getPassowrd());
+			String passwordStr;
+			
+				passwordStr = EncryptUtil.encrypt(user.getPassowrd());
+				userEntity.setPwdChangeFlag(false);
+			userEntity.setPassowrd(passwordStr);
 			secauthtokenEntity.setUserEntity(userEntity);
 			pwdHistoryEntity =  new PwdHistoryEntity();
 			pwdHistoryEntity.setCreatedTs(new Date());
-			pwdHistoryEntity.setPassword(user.getPassowrd());
+			pwdHistoryEntity.setPassword(passwordStr);
 			pwdHistoryEntity.setUserEntity(userEntity);
 			pwdHistoryEntity.setCreatedBy(userEntity.getUserId());
 			secauthtokenEntity.setStatus(false);
@@ -890,12 +986,18 @@ public class UserServiceImpl implements UserService{
 			userActivityEntity.setActivityCreatedBy(userEntity.getUserId());
 			userDAO.saveUserActivity(userActivityEntity);
 			
+			
 			return 0;
 			}
 			else
 			{
 				return 1;
 			}
+		} catch (UnsupportedEncodingException | GeneralSecurityException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			return 2;
+		}
 		}
 		else
 		{
@@ -999,10 +1101,10 @@ public class UserServiceImpl implements UserService{
 	@Transactional
 	public UserDTO resetUserPwd(UserReq userReq) {
 		UserDTO userDTO = null;
+		try {
 		UserActivityEntity userActivityEntity = null;
 		UserEntity userEntity = userDAO.getUser(userReq.getEditUserId());
 		String pwd =generatePassword();
-		System.out.println("Password:: "+pwd);
 		UserNotesEntity userNotesEntity = new UserNotesEntity();
 		userNotesEntity.setNotes(userReq.getNotes());
 		userNotesEntity.setCreatedBy(userReq.getNotesuserId());
@@ -1032,15 +1134,17 @@ public class UserServiceImpl implements UserService{
 		pwdHistoryEntities = userEntity.getPwdHistoryEntities();
 		pwdHistoryEntities.add(pwdHistoryEntity);
 		userEntity.setPwdHistoryEntities(pwdHistoryEntities);
+		pwd = EncryptUtil.encrypt(pwd);
 		userEntity.setPassowrd(pwd);
 		userEntity.setPwdChangeFlag(true);
-		
 		userEntity.setUserNotesEntities(userNotesEntities);
-		
 		userDAO.updateUser(userEntity);
-		
 		//userDAO.saveUserActivity(userActivityEntity);
 		userDTO = CopyBeanProperties.copyUserPerperties(userEntity);
+		} catch (UnsupportedEncodingException | GeneralSecurityException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		return userDTO;
 	}
 	
@@ -1084,7 +1188,7 @@ public class UserServiceImpl implements UserService{
 					{
 						sb.append(lower.charAt(rd.nextInt(lower.length())));
 					}
-					if(policyMap.get("Allow Special Characters (@#$%^&+=.-_*!)").toString().equalsIgnoreCase("YES") && number == 3)
+					if(policyMap.get("Allow Special Characters (@#$%^&+=-_*!)").toString().equalsIgnoreCase("YES") && number == 3)
 					{
 						sb.append(splChars.charAt(rd.nextInt(splChars.length())));
 					}
@@ -1094,9 +1198,6 @@ public class UserServiceImpl implements UserService{
 					}
 			
 			}
-		    
-		    System.out.println(sb.toString());
-		   
 		    
 		    return sb.toString();
 		    
@@ -1143,14 +1244,13 @@ public class UserServiceImpl implements UserService{
 	@Transactional
 	public UserSVCResp getPasswordPolicy() {
 		 UserSVCResp userSVCResp = new UserSVCResp();
-		 getInternalPolicies();
+		 getPolicies();
 		StringBuffer passwordRegExpr = new StringBuffer();
 		StringBuffer passwordString = new StringBuffer();
 		//^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=.\-_*!()])([a-zA-Z0-9@#$%^&+=*.\-_!()]){3,}$
 		passwordRegExpr = passwordRegExpr.append("^([");
 		passwordString.append("Password must contain ");
-		System.out.println(policyMap);
-		if(policyMap.get("Allow Special Characters (@#$%^&+=.-_*!)").toString().equalsIgnoreCase("YES"))
+		if(policyMap.get("Allow Special Characters (@#$%^&+=-_*!)").toString().equalsIgnoreCase("YES"))
 		{
 			passwordRegExpr =  passwordRegExpr.append("@#$%^&+=.\\-_*!");
 			passwordString.append("At least one special character");
@@ -1200,13 +1300,14 @@ public class UserServiceImpl implements UserService{
 			//^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=.\-_*!()])([a-zA-Z0-9@#$%^&+=*.\-_!()]){3,}$
 			passwordRegExpr = passwordRegExpr.append("^([");
 			passwordString.append("Password must contain ");
-			if(externalPolicyMap.get("Allow Special Characters (@#$%^&+=-_*!)").toString().equalsIgnoreCase("YES"))
+			/*if(externalPolicyMap!=null && externalPolicyMap.get("Allow Special Characters (@#$%^&+=-_*!)") != null &&
+					externalPolicyMap.get("Allow Special Characters (@#$%^&+=-_*!)").toString().equalsIgnoreCase("YES"))
 			{
 				passwordRegExpr =  passwordRegExpr.append("@#$%^&+=.\\-_*!");
 				passwordString.append("At least one special character");
 			}
 			
-			if(externalPolicyMap.get("Allow Upper Case Letters").toString().equalsIgnoreCase("YES"))
+			if(externalPolicyMap!=null && externalPolicyMap.get("Allow Upper Case Letters").toString().equalsIgnoreCase("YES"))
 			{
 				passwordRegExpr =  passwordRegExpr.append("A-Z");
 				if(passwordString.length() > 0)
@@ -1214,7 +1315,7 @@ public class UserServiceImpl implements UserService{
 				passwordString.append(" At least one upper case letter");
 			}
 			
-			if(externalPolicyMap.get("Allow Lower Case Letters").toString().equalsIgnoreCase("YES"))
+			if(externalPolicyMap!=null && externalPolicyMap.get("Allow Lower Case Letters").toString().equalsIgnoreCase("YES"))
 			{
 				passwordRegExpr =  passwordRegExpr.append("a-z");
 				if(passwordString.length() > 0)
@@ -1222,13 +1323,13 @@ public class UserServiceImpl implements UserService{
 				passwordString.append("At least one lower case letter");
 			}
 			
-			if(externalPolicyMap.get("Allow Numeric Characters").toString().equalsIgnoreCase("YES"))
+			if(externalPolicyMap!=null && externalPolicyMap.get("Allow Numeric Characters").toString().equalsIgnoreCase("YES"))
 			{
 				passwordRegExpr = passwordRegExpr.append("0-9");
 				if(passwordString.length() > 0)
 					passwordString.append(", ");
 				passwordString.append("at least one number ");
-			}
+			}*/
 			
 			//([a-zA-Z0-9@#$%^&+=*.\-_])
 		
