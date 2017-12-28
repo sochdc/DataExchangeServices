@@ -4,11 +4,9 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.InvocationTargetException;
 import java.security.GeneralSecurityException;
-import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
@@ -28,14 +26,12 @@ import javax.transaction.Transactional;
 import javax.xml.bind.DatatypeConverter;
 
 import org.apache.commons.beanutils.BeanUtils;
-import org.picketbox.util.EncryptionUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.MessageSource;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
-import com.soch.isvc.entities.NotesEntity;
 import com.soch.uam.dao.CommonDAO;
 import com.soch.uam.dao.UserDAO;
 import com.soch.uam.domain.AddressEntity;
@@ -87,9 +83,6 @@ import com.soch.uam.util.EncryptUtil;
 import com.soch.uam.util.OTPGenerator;
 import com.soch.uam.util.POJOCacheUtil;
 import com.soch.uam.util.SendEmail;
-
-import nl.flotsam.xeger.Xeger;
-import oracle.net.aso.p;
 
 @Service("userService")
 @PropertySource(value = { "classpath:application.properties"})
