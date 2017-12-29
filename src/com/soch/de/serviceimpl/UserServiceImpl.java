@@ -381,7 +381,6 @@ public class UserServiceImpl implements UserService{
 						long lastPwdChange = AppUtil.calculateDaysTillToday(userEntity.getPwdHistoryEntities().iterator().next().getCreatedTs());
 						if(expDays < lastPwdChange)
 						{
-							System.out.println("expDays "+expDays +" "+lastPwdChange);
 							returnUserDTO.setPwdChangeFlag(true);
 							userEntity.setPwdChangeFlag(true);
 							userDAO.updateUser(userEntity);
@@ -393,10 +392,42 @@ public class UserServiceImpl implements UserService{
 					Set<UserRoleEntity> userRoleEntities = userEntity.getUserRoleEntities();
 					for(UserRoleEntity userRoleEntity :userRoleEntities)
 					{
-						String appName = environment.getRequiredProperty(userDTO.getAppName());
-						if(userRoleEntity.getRolesEntity().getSystemEntity().getSystemName().equalsIgnoreCase(appName) && 
+						String appName = null;
+						if(userDTO.getAppName() != null)
+							appName = environment.getRequiredProperty(userDTO.getAppName());
+						if(appName != null && userRoleEntity.getRolesEntity().getSystemEntity().getSystemName().equalsIgnoreCase(appName) && 
 								userRoleEntity.isActiveStatus()){
 							returnUserDTO.setRoleName(userRoleEntity.getRolesEntity().getRoleName());
+							
+							if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Admin"))
+							{
+								returnUserDTO.setRoleName(userRoleEntity.getRolesEntity().getRoleName());
+									returnUserDTO.setAccess(1);
+									break;
+							}
+							else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Requestor"))
+							{
+								returnUserDTO.setAccess(2);
+								break;
+							}
+							else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Approve"))
+							{
+								returnUserDTO.setAccess(3);
+								break;
+							}
+							else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Implementor"))
+							{
+								returnUserDTO.setAccess(3);
+								break;
+							}
+							else if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Report"))
+							{
+								returnUserDTO.setAccess(4);
+								returnUserDTO.setDepartment(userRoleEntity.getRolesEntity().getSystemEntity().getDeptEntity().getDeptName());
+								returnUserDTO.setRoleName(userRoleEntity.getRolesEntity().getRoleName());
+								break;
+							}
+							
 						}
 						else if(userRoleEntity.isActiveStatus()){
 						if(userRoleEntity.getRolesEntity().getRoleName().equalsIgnoreCase("Admin"))
